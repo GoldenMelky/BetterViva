@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#a31b13">
+  <title>BetterViva</title>
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="BetterViva">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <span class="logo">BetterViva</span>
+    <button id="avatar" class="avatar" hidden aria-label="Esci" title="Esci"></button>
+  </header>
+
+  <main>
+    <!-- Accesso -->
+    <section id="view-login" hidden>
+      <h1>Accedi con ClasseViva</h1>
+      <form id="login-form" class="card">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <label class="check">
+          <input id="remember" type="checkbox" checked>
+          <span>Resta connesso su questo dispositivo</span>
+        </label>
+        <p class="hint">Le credenziali restano cifrate in questo browser. Il server non le salva.</p>
+
+        <p id="login-error" class="error" role="alert" hidden></p>
+        <button id="login-btn" type="submit">Accedi</button>
+      </form>
+    </section>
+
+    <!-- Setup iniziale: benvenuto, materie, orario (un giorno per volta) -->
+    <section id="view-setup" hidden>
+      <div id="setup-body"></div>
+    </section>
+
+    <!-- Home: giorni (scorrono) + eventi del giorno (scorrono insieme) -->
+    <section id="view-home" hidden>
+      <div class="daybar">
+        <div id="days" class="days" aria-label="Giorni"></div>
+        <button id="mode-toggle" class="mode-toggle" type="button" role="switch" aria-checked="false" data-mode="orario" aria-label="Vista eventi" title="Cambia vista">
+          <span class="knob">
+            <svg class="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <svg class="i-events" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M14 3l5 5v2"/><path d="M20.3 12.7l-6.6 6.6-2.7.7.7-2.7 6.6-6.6a1.4 1.4 0 0 1 2 2z"/></svg>
+          </span>
+        </button>
+      </div>
+      <div id="panels" class="panels"></div>
+      <div id="evlist" class="evlist" hidden></div>
+
+      <!-- Calendario del mese con verifiche e interrogazioni -->
+      <section id="cal" class="cal" aria-labelledby="cal-title" hidden>
+        <h2 id="cal-title">Verifiche e interrogazioni</h2>
+        <div class="cal-week" aria-hidden="true">
+          <span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span>
+        </div>
+        <div id="cal-grid" class="cal-grid"></div>
+      </section>
+    </section>
+
+    <p id="status" class="status">Caricamento…</p>
+  </main>
+
+  <script src="/static/sheet.js"></script>
+  <script src="/static/calendar.js"></script>
+  <script src="/static/home.js"></script>
+  <script src="/static/setup.js"></script>
+  <script src="/static/app.js"></script>
+  <script src="/static/pwa.js"></script>
+</body>
+</html>
