@@ -33,8 +33,11 @@ Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di 
 - [ ] Migliorare l'interfaccia
 - [ ] Bacheca
 - [ ] Voti
+  - [ ] Calcolatore di voti
 - [ ] Assenze
 - [ ] Note
 - [ ] Altre funzioni di ClasseViva
+- [ ] Temi
+- [ ] Impostazioni
 - [ ] Renderlo serverless
 
