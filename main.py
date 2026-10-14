@@ -120,11 +120,11 @@ def current_session(request: Request) -> dict:
 @app.post("/api/login")
 def login(creds: Credentials, request: Request, response: Response):
     check_rate(client_ip(request))
+    testuser = False
     if creds.username.strip() == "testuser":
+        testuser = True
         # Simula un utente valido per test
         creds.username = os.getenv("BV_TESTUSER")
-        print(creds.username)
-        print(os.getenv("BV_TESTUSER"))
         creds.password = os.getenv("BV_TESTPASS")
     try:
         user = Utente(creds.username.strip(), creds.password)
@@ -148,6 +148,7 @@ def login(creds: Credentials, request: Request, response: Response):
         "name": f'{user.login.get("firstName", "")} {user.login.get("lastName", "")}'.strip(),
         "first_name": (user.login.get("firstName") or "").strip().title(),
         "expires": parse_expiry(user.login.get("expire")),
+        "studentId": "testuser" if testuser else user.login.get("studentId")
     }
     response.set_cookie(
         COOKIE, sid, httponly=True, secure=SECURE, samesite="lax",
@@ -161,12 +162,12 @@ def me(request: Request):
     s = current_session(request)
     year = timetable.school_year(date.today())
     return {"name": s["name"], "first_name": s.get("first_name", ""), "school_year": year,
-            "setup_needed": db.get_timetable(s["username"], year) is None}
+            "setup_needed": db.get_timetable(s["studentId"], year) is None}
 
 
 def subject_names(s: dict) -> dict[int, str]:
     """id materia -> nome da mostrare: quello scelto dall'utente, altrimenti quello proposto."""
-    config = db.get_options(s["username"]).get("subject_config", {})
+    config = db.get_options(s["studentId"]).get("subject_config", {})
     short = timetable.short_names()
     return {x["id"]: (config.get(str(x["id"])) or {}).get("name") or timetable.default_name(x["description"], short)
             for x in load_subjects(s)}
@@ -174,7 +175,7 @@ def subject_names(s: dict) -> dict[int, str]:
 
 def schedule_by_weekday(s: dict) -> dict[int, list[int]]:
     """giorno della settimana -> id materia in ordine di ora (vuoto se l'orario non è configurato)."""
-    saved = db.get_timetable(s["username"], timetable.school_year(date.today()))
+    saved = db.get_timetable(s["studentId"], timetable.school_year(date.today()))
     out: dict[int, list[int]] = {}
     for c in (saved or {}).get("cells", []):
         out.setdefault(c["weekday"], []).append(c["subject_id"])   # le celle sono già ordinate per ora
@@ -195,16 +196,16 @@ def events(request: Request, days: int = 14):
     days = max(1, min(days, 60))
     cached = s.get("events")
     if cached and cached["days"] == days and time.time() - cached["at"] < 600:
-        return with_done(cached["data"], s["username"])
+        return with_done(cached["data"], s["studentId"])
     try:
         found = build_events(s["user"], days, load_subjects(s), subject_names(s), schedule_by_weekday(s))
         data = {"today": date.today().isoformat(),
-                "events": overrides.apply(found, db.get_event_overrides(s["username"]))}
+                "events": overrides.apply(found, db.get_event_overrides(s["studentId"]))}
     except (requests.RequestException, KeyError, ValueError, TypeError):
         log.exception("events: errore nel recupero dei dati")
         raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
     s["events"] = {"at": time.time(), "days": days, "data": data}
-    return with_done(data, s["username"])
+    return with_done(data, s["studentId"])
 
 
 class KindIn(BaseModel):
@@ -217,7 +218,7 @@ def set_event_kind(event_id: str, body: KindIn, request: Request):
     s = current_session(request)
     if not re.fullmatch(r"[0-9a-f]{12}", event_id):
         raise HTTPException(422, "Id evento non valido")
-    db.set_event_override(s["username"], event_id, body.kind or "none")
+    db.set_event_override(s["studentId"], event_id, body.kind or "none")
     s.pop("events", None)      # le cache contengono il vecchio `kind`
     s.pop("calendar", None)
     return {"ok": True}
@@ -233,7 +234,7 @@ def set_event_done(event_id: str, body: DoneIn, request: Request):
     s = current_session(request)
     if not re.fullmatch(r"[0-9a-f]{12}", event_id):
         raise HTTPException(422, "Id evento non valido")
-    db.set_event_done(s["username"], event_id, body.done)
+    db.set_event_done(s["studentId"], event_id, body.done)
     return {"ok": True}
 
 
@@ -253,7 +254,7 @@ def calendar(request: Request):
     try:
         events = build_events(s["user"], 0, load_subjects(s), subject_names(s), schedule_by_weekday(s),
                               since=start, until=end)
-        overrides.apply(events, db.get_event_overrides(s["username"]))
+        overrides.apply(events, db.get_event_overrides(s["studentId"]))
     except (requests.RequestException, KeyError, ValueError, TypeError):
         log.exception("calendar: errore nel recupero dei dati")
         raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
@@ -270,7 +271,6 @@ def load_subjects(s: dict) -> list[dict]:
     # /api/events e /api/timetable arrivano insieme in due thread: una sola richiesta a ClasseViva
     with _subjects_lock:
         if "subjects" not in s:
-            print(s["user"].subjects())
             s["subjects"] = s["user"].subjects()["subjects"]
     return s["subjects"]
 
@@ -321,10 +321,10 @@ def setup_timetable(request: Request):
 def get_timetable(request: Request):
     """Orario salvato + nomi/laboratori scelti dall'utente (id materia -> config)."""
     s = current_session(request)
-    saved = db.get_timetable(s["username"], timetable.school_year(date.today()))
+    saved = db.get_timetable(s["studentId"], timetable.school_year(date.today()))
     if saved is None:
         raise HTTPException(404, "Orario non ancora configurato.")
-    saved["subjects"] = db.get_options(s["username"]).get("subject_config", {})
+    saved["subjects"] = db.get_options(s["studentId"]).get("subject_config", {})
     # nome da mostrare per ogni materia (id -> nome)
     try:
         saved["names"] = {str(k): v for k, v in subject_names(s).items()}
@@ -360,7 +360,7 @@ def save_setup(body: SetupIn, request: Request):
     except ValueError as e:
         raise HTTPException(422, str(e))
     year = timetable.school_year(date.today())
-    db.save_setup(s["username"], year, {"version": 1, "cells": cells}, {"subject_config": config})
+    db.save_setup(s["studentId"], year, {"version": 1, "cells": cells}, {"subject_config": config})
     s.pop("setup", None)
     s.pop("events", None)   # gli eventi dipendono dall'orario
     s.pop("calendar", None)
@@ -369,8 +369,11 @@ def save_setup(body: SetupIn, request: Request):
 
 @app.post("/api/logout")
 async def logout(request: Request, response: Response):
+    if current_session(request)["studentId"] == "testuser":
+        db.delete_user("testuser")
     sessions.pop(request.cookies.get(COOKIE), None)
     response.delete_cookie(COOKIE)
+    
     return {"ok": True}
 
 

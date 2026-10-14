@@ -28,7 +28,6 @@ class Utente:
         self.login.update({"studentId": self.login['ident'][1:-1]})  # Estrae lo studentId dallo username
         # Header propri di questa istanza, senza toccare quello globale (condiviso tra utenti)
         self.headers = {**headers, "Z-Auth-Token": self.login["token"]}
-        print(self.login)
     
     def portfolio(self):
         # Recupera il portfolio dello studente

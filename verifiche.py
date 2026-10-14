@@ -29,6 +29,7 @@ KEYWORDS: list[tuple[str, str]] = [
     (r"compit[oi] in classe", "verifica"),
     (r"prova (?:scritta|pratica|di verifica)", "verifica"),
     (r"esame", "verifica"),
+    (r"compito","verifica"),
     (r"test|quiz", "verifica"),
     # inglese
     (r"oral (?:test(?:ing)?|exam(?:ination)?|assessment)", "interrogazione"),
@@ -40,7 +41,7 @@ _KEYWORD = re.compile(r"\b(?:" + "|".join(f"(?P<k{i}>{p})" for i, (p, _) in enum
 
 # Cosa precede la parola chiave e la rende una preparazione ("<preparazione> ... per la verifica")
 _PREP_WORDS = (r"esercitazion\w*|esercizi\w*|ripass\w*|stud\w*|prepar\w*|simulazion\w*|ripetizion\w*|"
-               r"allenament\w*|ripet\w*|exercise\w*|practice|revis\w*|study\w*|review\w*|prepar\w*|training")
+               r"allenament\w*|ripet\w*|exercise\w*|practice|revis\w*|study\w*|review\w*|prepar\w*|training|finire|complete|finish|do|work on|prepare for|get ready for|ready for")
 _LINKS = r"(?:per|in vista|in preparazione|for|ahead of|before|to prepare for)"
 _ARTICLES = r"(?:la|il|lo|l|le|gli|i|alla|allo|all|al|della|dello|dell|del|di|a|of|the|your|our|an?)"
 _BEFORE_PREP = re.compile(

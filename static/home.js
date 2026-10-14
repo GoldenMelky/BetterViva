@@ -120,7 +120,7 @@ const Home = (() => {
     const row = document.createElement("div"); row.className = "ev-row";
     row.append(eventLine(e));
     let chk = null;
-    if (isHomework(e) && !e.kind) {
+    if (!e.kind) {
       chk = document.createElement("button");
       chk.type = "button"; chk.className = "chk"; chk.innerHTML = ICON_CHECK;
       chk.setAttribute("role", "checkbox");
