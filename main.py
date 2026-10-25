@@ -68,11 +68,18 @@ class SetupIn(BaseModel):
 
 
 def norm_username(username: str) -> str:
+    """Normalizza un nome utente rimuovendo gli spazi esterni e ignorando le maiuscole."""
     return username.strip().lower()
 
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    """Aggiunge le intestazioni di sicurezza alla risposta HTTP.
+
+    Le risposte API non vengono memorizzate nella cache; per tutte le risposte
+    imposta inoltre la Content Security Policy e le intestazioni anti-sniffing
+    e di referer.
+    """
     response = await call_next(request)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; style-src 'self'; script-src 'self'; "
@@ -86,10 +93,16 @@ async def security_headers(request: Request, call_next):
 
 
 def client_ip(request: Request) -> str:
+    """Restituisce l'indirizzo del client, preferendo quello inoltrato da Cloudflare."""
     return request.headers.get("cf-connecting-ip") or request.client.host
 
 
 def check_rate(ip: str, limit: int = 10, window: int = 600) -> None:
+    """Registra un tentativo e limita le richieste recenti provenienti dallo stesso IP.
+
+    I tentativi più vecchi di `window` secondi vengono esclusi dal conteggio.
+    Solleva HTTP 429 se sono già stati raggiunti `limit` tentativi nella finestra.
+    """
     now = time.time()
     recent = [t for t in attempts.get(ip, []) if now - t < window]
     if len(recent) >= limit:
@@ -99,6 +112,11 @@ def check_rate(ip: str, limit: int = 10, window: int = 600) -> None:
 
 
 def parse_expiry(value: str | None) -> float:
+    """Converte la scadenza ISO 8601 in timestamp Unix.
+
+    Se il valore manca o non è valido, usa una scadenza prudenziale di un'ora
+    a partire dall'ora corrente.
+    """
     try:
         return datetime.fromisoformat(value).timestamp()
     except (TypeError, ValueError):
@@ -106,7 +124,12 @@ def parse_expiry(value: str | None) -> float:
 
 
 def current_session(request: Request) -> dict:
-    """Da usare negli endpoint futuri: s["user"] è l'istanza Utente."""
+    """Recupera la sessione associata al cookie della richiesta.
+
+    Restituisce il record in memoria, che contiene fra l'altro l'istanza
+    `Utente`. Se la sessione non esiste o è scaduta, rimuove l'eventuale record
+    residuo e solleva HTTP 401.
+    """
     sid = request.cookies.get(COOKIE)
     s = sessions.get(sid) if sid else None
     if not s or s["expires"] <= time.time():
@@ -119,6 +142,17 @@ def current_session(request: Request) -> dict:
 # FastAPI esegue l'endpoint in un thread senza fermare gli altri.
 @app.post("/api/login")
 def login(creds: Credentials, request: Request, response: Response):
+    """Autentica l'utente e crea una sessione identificata da un cookie opaco.
+
+    Applica il limite di tentativi per IP, crea il client ClasseViva e salva
+    in memoria i dati necessari agli endpoint. Elimina sessioni scadute e la
+    sessione precedente del browser, quindi imposta un cookie HTTP-only con
+    scadenza corrispondente a quella del token.
+
+    Il nome `testuser` abilita l'utente di prova configurato nell'ambiente.
+    Solleva HTTP 401 per credenziali errate e HTTP 502 se ClasseViva non è
+    raggiungibile o restituisce dati inattesi.
+    """
     check_rate(client_ip(request))
     testuser = False
     if creds.username.strip() == "testuser":
@@ -159,6 +193,11 @@ def login(creds: Credentials, request: Request, response: Response):
 
 @app.get("/api/me")
 def me(request: Request):
+    """Restituisce il profilo minimo della sessione e lo stato della configurazione.
+
+    Include nome, nome proprio, anno scolastico corrente e indica se l'utente
+    deve ancora configurare l'orario.
+    """
     s = current_session(request)
     year = timetable.school_year(date.today())
     return {"name": s["name"], "first_name": s.get("first_name", ""), "school_year": year,
@@ -166,7 +205,11 @@ def me(request: Request):
 
 
 def subject_names(s: dict) -> dict[int, str]:
-    """id materia -> nome da mostrare: quello scelto dall'utente, altrimenti quello proposto."""
+    """Costruisce la mappa ID materia -> nome da mostrare.
+
+    Preferisce il nome personalizzato salvato dall'utente; in sua assenza usa
+    il nome predefinito derivato dalla descrizione ClasseViva.
+    """
     config = db.get_options(s["studentId"]).get("subject_config", {})
     short = timetable.short_names()
     return {x["id"]: (config.get(str(x["id"])) or {}).get("name") or timetable.default_name(x["description"], short)
@@ -174,7 +217,12 @@ def subject_names(s: dict) -> dict[int, str]:
 
 
 def schedule_by_weekday(s: dict) -> dict[int, list[int]]:
-    """giorno della settimana -> id materia in ordine di ora (vuoto se l'orario non è configurato)."""
+    """Restituisce le materie dell'orario raggruppate per giorno della settimana.
+
+    Le chiavi sono i giorni numerati da 0 (lunedì) a 6 (domenica); gli ID delle
+    materie mantengono l'ordine delle ore. Il risultato è vuoto se l'orario
+    dell'anno scolastico corrente non è stato configurato.
+    """
     saved = db.get_timetable(s["studentId"], timetable.school_year(date.today()))
     out: dict[int, list[int]] = {}
     for c in (saved or {}).get("cells", []):
@@ -183,7 +231,12 @@ def schedule_by_weekday(s: dict) -> dict[int, list[int]]:
 
 
 def with_done(data: dict, username: str) -> dict:
-    """Aggiunge `done` a ogni evento senza invalidare la cache degli eventi."""
+    """Aggiunge a ogni evento il flag `done` letto dal database.
+
+    Aggiorna il dizionario ricevuto sul posto e lo restituisce; mantenere questo
+    stato separato dalla cache degli eventi evita di invalidarla quando un
+    compito viene segnato come svolto.
+    """
     done = db.get_done_events(username)
     for event in data["events"]:
         event["done"] = event["id"] in done
@@ -191,20 +244,31 @@ def with_done(data: dict, username: str) -> dict:
 
 
 @app.get("/api/events")
-def events(request: Request, days: int = 14):
+def events(request: Request, days: int = 14, start: date | None = None):
+    """Restituisce gli eventi scolastici nell'intervallo richiesto.
+
+    `start` indica il primo giorno incluso e, se omesso, corrisponde a oggi;
+    `days` indica lo scarto in giorni fino all'ultimo giorno incluso ed è limitato
+    all'intervallo 1-60. Riutilizza per dieci minuti la cache della sessione se
+    data iniziale e scarto coincidono; altrimenti recupera i dati da ClasseViva,
+    applica le correzioni manuali e aggiunge lo stato di completamento. Solleva
+    HTTP 502 se il recupero fallisce.
+    """
     s = current_session(request)
     days = max(1, min(days, 60))
+    start = start or date.today()
     cached = s.get("events")
-    if cached and cached["days"] == days and time.time() - cached["at"] < 600:
+    if cached and cached["start"] == start.isoformat() and cached["days"] == days and time.time() - cached["at"] < 600:
         return with_done(cached["data"], s["studentId"])
     try:
-        found = build_events(s["user"], days, load_subjects(s), subject_names(s), schedule_by_weekday(s))
+        found = build_events(s["user"], days, load_subjects(s), subject_names(s), schedule_by_weekday(s),
+                             since=start, until=start + timedelta(days=days))
         data = {"today": date.today().isoformat(),
                 "events": overrides.apply(found, db.get_event_overrides(s["studentId"]))}
     except (requests.RequestException, KeyError, ValueError, TypeError):
         log.exception("events: errore nel recupero dei dati")
         raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
-    s["events"] = {"at": time.time(), "days": days, "data": data}
+    s["events"] = {"at": time.time(), "start": start.isoformat(), "days": days, "data": data}
     return with_done(data, s["studentId"])
 
 
@@ -214,7 +278,12 @@ class KindIn(BaseModel):
 
 @app.put("/api/events/{event_id}/kind")
 def set_event_kind(event_id: str, body: KindIn, request: Request):
-    """Corregge a mano il riconoscimento di un evento (vedi overrides.py)."""
+    """Salva la classificazione manuale di un evento e invalida le cache dipendenti.
+
+    `body.kind` può indicare una verifica, un'interrogazione o `None` per
+    escludere l'evento dalle prove. L'ID deve essere composto da 12 cifre
+    esadecimali; in caso contrario viene restituito HTTP 422.
+    """
     s = current_session(request)
     if not re.fullmatch(r"[0-9a-f]{12}", event_id):
         raise HTTPException(422, "Id evento non valido")
@@ -230,7 +299,11 @@ class DoneIn(BaseModel):
 
 @app.put("/api/events/{event_id}/done")
 def set_event_done(event_id: str, body: DoneIn, request: Request):
-    """Segna (o toglie) un compito come svolto."""
+    """Salva se un evento è stato completato, senza ricostruire la cache eventi.
+
+    L'ID deve essere composto da 12 cifre esadecimali; un formato non valido
+    produce HTTP 422. Lo stato viene associato all'utente autenticato.
+    """
     s = current_session(request)
     if not re.fullmatch(r"[0-9a-f]{12}", event_id):
         raise HTTPException(422, "Id evento non valido")
@@ -240,8 +313,14 @@ def set_event_done(event_id: str, body: DoneIn, request: Request):
 
 @app.get("/api/calendar")
 def calendar(request: Request):
-    """Verifiche e interrogazioni del mese in corso, per intere settimane (da lunedì a domenica).
-    Comprende anche i giorni passati del mese."""
+    """Restituisce le prove del mese corrente in una griglia di settimane complete.
+
+    L'intervallo parte dal lunedì della settimana che contiene il primo giorno
+    del mese e termina la domenica della settimana che contiene l'ultimo giorno;
+    include quindi anche i giorni passati del mese. La risposta è memorizzata per
+    dieci minuti al giorno e contiene solo eventi classificati come prove.
+    Solleva HTTP 502 se ClasseViva non fornisce i dati necessari.
+    """
     s = current_session(request)
     today = date.today()
     cached = s.get("calendar")
@@ -268,7 +347,12 @@ _subjects_lock = threading.Lock()
 
 
 def load_subjects(s: dict) -> list[dict]:
-    # /api/events e /api/timetable arrivano insieme in due thread: una sola richiesta a ClasseViva
+    """Carica le materie di ClasseViva una sola volta per sessione.
+
+    Il lock coordina le richieste concorrenti, ad esempio quelle simultanee di
+    `/api/events` e `/api/timetable`, così non partono più caricamenti remoti.
+    Il risultato viene conservato nel record della sessione.
+    """
     with _subjects_lock:
         if "subjects" not in s:
             s["subjects"] = s["user"].subjects()["subjects"]
@@ -276,7 +360,12 @@ def load_subjects(s: dict) -> list[dict]:
 
 
 def load_lessons(user, today: date) -> list[dict]:
-    """Lezioni delle ultime settimane, a blocchi di ~un mese."""
+    """Recupera le lezioni dall'inizio del periodo utile fino a `today`.
+
+    Divide l'intervallo in richieste di circa un mese, usa il formato data
+    richiesto dal wrapper ClasseViva e rimuove eventuali duplicati tramite
+    l'identificativo dell'evento.
+    """
     start, lessons, seen = timetable.lookback_start(today), [], set()
     while start <= today:
         end = min(start + timedelta(days=30), today)
@@ -291,7 +380,13 @@ def load_lessons(user, today: date) -> list[dict]:
 
 @app.get("/api/setup/timetable")
 def setup_timetable(request: Request):
-    """Proposta di orario ricavata dalle lezioni, da far verificare all'utente."""
+    """Genera una proposta di orario da sottoporre alla verifica dell'utente.
+
+    Riutilizza per dieci minuti il risultato già calcolato nella sessione;
+    altrimenti carica materie e lezioni, rileva l'orario e arricchisce le materie
+    con nomi suggeriti, indicazioni di laboratorio e docenti. Solleva HTTP 502
+    se il recupero dei dati da ClasseViva fallisce.
+    """
     s = current_session(request)
     cached = s.get("setup")
     if cached and time.time() - cached["at"] < 600:
@@ -319,7 +414,13 @@ def setup_timetable(request: Request):
 
 @app.get("/api/timetable")
 def get_timetable(request: Request):
-    """Orario salvato + nomi/laboratori scelti dall'utente (id materia -> config)."""
+    """Restituisce l'orario dell'anno corrente arricchito con le preferenze utente.
+
+    Include configurazione delle materie, nomi da mostrare e un'etichetta pronta
+    per ogni ora, con il prefisso del laboratorio quando necessario. Se l'orario
+    non è ancora configurato solleva HTTP 404; se ClasseViva non è disponibile,
+    ricava i nomi dai dati già salvati.
+    """
     s = current_session(request)
     saved = db.get_timetable(s["studentId"], timetable.school_year(date.today()))
     if saved is None:
@@ -346,7 +447,13 @@ def get_timetable(request: Request):
 
 @app.post("/api/setup")
 def save_setup(body: SetupIn, request: Request):
-    """Salva, in un'unica transazione, materie (nomi, laboratori) e orario verificati."""
+    """Convalida e salva insieme le preferenze delle materie e l'orario.
+
+    Verifica i dati rispetto alle materie ClasseViva, poi li scrive in una
+    transazione per l'anno scolastico corrente. In caso di dati non validi
+    restituisce HTTP 422; dopo il salvataggio invalida le cache di setup, eventi
+    e calendario che dipendono dalla configurazione.
+    """
     s = current_session(request)
     try:
         subjects = load_subjects(s)
@@ -369,6 +476,11 @@ def save_setup(body: SetupIn, request: Request):
 
 @app.post("/api/logout")
 async def logout(request: Request, response: Response):
+    """Chiude la sessione corrente e rimuove il cookie dal browser.
+
+    Se si tratta della sessione di prova, elimina anche i dati dell'utente di
+    test dal database. Restituisce `{"ok": true}` al termine.
+    """
     if current_session(request)["studentId"] == "testuser":
         db.delete_user("testuser")
     sessions.pop(request.cookies.get(COOKIE), None)
@@ -379,11 +491,17 @@ async def logout(request: Request, response: Response):
 
 @app.get("/")
 async def index():
+    """Serve il documento HTML principale dell'applicazione web."""
     return FileResponse(STATIC / "index.html")
 
 
 @app.get("/sw.js", include_in_schema=False)
 async def service_worker():
+    """Serve il service worker dalla radice per abilitarne il controllo sul sito.
+
+    Disabilita la cache HTTP del file così il browser può ricevere rapidamente
+    gli aggiornamenti del service worker.
+    """
     # dalla radice, così controlla tutto il sito; senza cache, così gli aggiornamenti arrivano subito
     return FileResponse(STATIC / "sw.js", media_type="application/javascript",
                         headers={"Cache-Control": "no-cache"})

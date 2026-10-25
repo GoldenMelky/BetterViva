@@ -40,4 +40,4 @@ Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di 
 - [ ] Temi
 - [ ] Impostazioni
 - [ ] Renderlo serverless
-
+- [ ] Sistema caching decente

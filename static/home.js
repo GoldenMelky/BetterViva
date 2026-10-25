@@ -4,8 +4,12 @@
 const Home = (() => {
   const SLOT = 96;                       // larghezza di una voce del selettore (px)
   const SMALL = 13 / 24;                 // scala delle voci non centrali
+  const WINDOW_DAYS = 42;
+  const WINDOW_SHIFT = 14;
+  const INITIAL_PAST = 14;
+  const WINDOW_EDGE = 7;
   const MUTED = [134, 62, 62], WHITE = [255, 255, 255];
-  const RELATIVE = ["Oggi", "Domani", "Dopodomani"];
+  const RELATIVE = ["Ieri", "Oggi", "Domani"];
   const WEEKDAYS = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const KIND = { verifica: "Verifica", interrogazione: "Interrogazione" };
@@ -15,12 +19,18 @@ const Home = (() => {
 
   let sel, panels, list, toggle;
   let items = [], sections = [], secDay = [], doneRefs = new Map(), eventsById = new Map();
+  let windowStart = null, eventData = [], timetableData = null, shifting = false;
   let mode = "orario", driver = null, timer = null;
+  let touching = false, glideId = 0;     // dito appoggiato / animazione del selettore in corso
+  const SETTLE_MS = 120;
 
   const mix = (t) => `rgb(${MUTED.map((m, i) => Math.round(m + (WHITE[i] - m) * t)).join(",")})`;
   const clamp = (n) => Math.max(0, Math.min(items.length - 1, n));
   const isoDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
   const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const shiftDate = (d, days) => { const out = new Date(d); out.setDate(out.getDate() + days); return out; };
+  const dayOffset = (from, to) => Math.round((Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) / 864e5);
+  const dateAt = (index) => shiftDate(windowStart, index);
 
   /* ---- le due viste: come leggere/impostare la posizione ----
      p = giorno del selettore (anche frazionario). Nella vista eventi i giorni senza eventi non hanno
@@ -44,10 +54,11 @@ const Home = (() => {
     list.scrollTop = sections[k].offsetTop + f * (sections[k + 1].offsetTop - sections[k].offsetTop);
   }
   // a riposo su un giorno: l'elenco mostra quel giorno, o il primo successivo che ha eventi
-  function listSnap(idx) {
+  function listSnap(idx, smooth = false) {
     if (!sections.length) return;
     const k = secDay.findIndex((d) => d >= idx);
-    list.scrollTop = sections[k < 0 ? sections.length - 1 : k].offsetTop;
+    const top = sections[k < 0 ? sections.length - 1 : k].offsetTop;
+    if (smooth) list.scrollTo({ top, behavior: "smooth" }); else list.scrollTop = top;
   }
   const panelsSet = (p) => { panels.scrollLeft = p * panels.clientWidth; };
   const views = {
@@ -160,11 +171,14 @@ const Home = (() => {
   }
 
   /* ---- vista eventi: elenco verticale, con l'ora se la materia è in orario ---- */
-  function fillDay(sec, d, i, events, lessons) {
+  function fillDay(sec, d, relativeDay, events, lessons) {
     if (!events.length) return false;
     const head = document.createElement("h2"); head.className = "dayhead";
-    head.append(line("strong", "", WEEKDAYS[d.getDay()]), document.createTextNode(`${d.getDate()} ${MONTHS[d.getMonth()]}`));
-    if (i < RELATIVE.length) head.append(line("span", "badge", RELATIVE[i]));
+    if (relativeDay >= -1 && relativeDay <= 1) {
+      head.append(line("strong", "", RELATIVE[relativeDay + 1]));
+    } else {
+      head.append(line("strong", "", WEEKDAYS[d.getDay()]), document.createTextNode(`${d.getDate()} ${MONTHS[d.getMonth()]}`));
+    }
     sec.append(head);
 
     const first = new Map();
@@ -192,43 +206,93 @@ const Home = (() => {
     });
   }
 
+  /* ---- sincronizzazione selettore ⇄ vista ----
+     Regole:
+     - chi viene toccato è il driver: solo lui mantiene lo snap nativo, l'altro segue senza snap;
+     - lo "stop" (settle) non parte mai col dito appoggiato, solo dopo touchend + scroll fermo;
+     - a riposo si riabilita prima lo snap e SOLO DOPO si scrivono le posizioni esatte
+       (altrimenti il browser si "riaggancia" al target vecchio: lo scatto al rilascio);
+     - i click sul giorno non usano scrollTo smooth + snap (overshoot) ma un'animazione rAF
+       che muove selettore e vista nello stesso frame. */
+  const scrollers = () => [sel, panels, list];
+  const setSnap = (el, on) => { el.style.scrollSnapType = on ? "" : "none"; };
+  const leadEl = (src) => (src === "sel" ? sel : view().el());
+  const followEl = (src) => (src === "sel" ? view().el() : sel);
   const position = (src) => (src === "sel" ? sel.scrollLeft / SLOT : view().get());
 
+  function cancelGlide() { if (glideId) { cancelAnimationFrame(glideId); glideId = 0; } }
+
+  function arm() {                       // (ri)avvia l'attesa dello stop, mai a dito appoggiato
+    clearTimeout(timer);
+    if (!touching) timer = setTimeout(settle, SETTLE_MS);
+  }
+
   function onScroll(src) {
-    if (driver !== src) return;          // ignora gli scroll provocati dal follower
+    if (driver !== src) return;          // ignora gli scroll provocati dal follower (o dall'animazione)
     const p = position(src);
     if (src === "sel") view().set(p);
     else sel.scrollLeft = p * SLOT;
     paint(p);
-    clearTimeout(timer);
-    timer = setTimeout(settle, 140);
+    arm();
   }
 
-  function settle() {
-    if (!driver) return;
-    const idx = clamp(Math.round(position(driver)));
-    if (driver === "sel") view().snap(idx);
-    else sel.scrollTo({ left: idx * SLOT, behavior: "instant" });
-    sel.style.scrollSnapType = panels.style.scrollSnapType = list.style.scrollSnapType = "";
+  // A riposo sul giorno idx. writeView=false: la vista è quella che l'utente sta leggendo, non la tocco.
+  function rest(idx, writeView) {
+    clearTimeout(timer); cancelGlide();
     driver = null;
+    scrollers().forEach((el) => setSnap(el, true));
+    void sel.offsetWidth;                // applica lo snap prima di scrivere le posizioni
+    sel.scrollLeft = idx * SLOT;
+    if (writeView) view().snap(idx, true);
     paint(idx);
+    if (idx <= WINDOW_EDGE) void shiftWindow(-1);
+    else if (idx >= WINDOW_DAYS - WINDOW_EDGE - 1) void shiftWindow(1);
+  }
+
+  function settle() {                    // gesto finito e scroll fermo
+    if (!driver || driver === "glide" || touching) return;
+    const src = driver;
+    const idx = clamp(Math.round(position(src)));
+    if (src === "sel") rest(idx, true);
+    else glide(idx, false);              // la vista resta dov'è, il selettore la raggiunge dolcemente
+  }
+
+  // Anima il selettore (e, se followView, anche la vista) fino al giorno `to`, un frame alla volta.
+  function glide(to, followView) {
+    clearTimeout(timer); cancelGlide();
+    const from = sel.scrollLeft / SLOT;
+    const dist = Math.abs(to - from);
+    if (dist < 0.02) { rest(to, followView); return; }
+    driver = "glide";
+    scrollers().forEach((el) => setSnap(el, false));
+    const dur = Math.min(420, 160 + 70 * Math.sqrt(dist));
+    const t0 = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / dur);
+      const p = from + (to - from) * (1 - Math.pow(1 - t, 3));   // easeOutCubic: arriva senza sbavature
+      sel.scrollLeft = p * SLOT;
+      if (followView) view().set(p);
+      paint(p);
+      if (t < 1) glideId = requestAnimationFrame(step);
+      else { glideId = 0; rest(to, followView); }
+    };
+    glideId = requestAnimationFrame(step);
   }
 
   function take(src) {                   // chi inizia a toccare diventa il driver
-    if (driver && driver !== src) settle();
+    cancelGlide(); clearTimeout(timer);
+    if (driver === src) return;
     driver = src;
-    (src === "sel" ? view().el() : sel).style.scrollSnapType = "none";
+    setSnap(leadEl(src), true);
+    setSnap(followEl(src), false);
   }
 
-  function goTo(i) {
-    take("sel");
-    sel.scrollTo({ left: i * SLOT, behavior: "smooth" });
-  }
+  const goTo = (i) => glide(clamp(i), true);
 
   function applyMode(next, save = true) {
     const idx = items.length ? clamp(Math.round(sel.scrollLeft / SLOT)) : startDay();
-    clearTimeout(timer); driver = null;
-    sel.style.scrollSnapType = panels.style.scrollSnapType = list.style.scrollSnapType = "";
+    clearTimeout(timer); cancelGlide(); driver = null;
+    scrollers().forEach((el) => setSnap(el, true));
     mode = next;
     panels.hidden = mode !== "orario";
     list.hidden = mode !== "eventi";
@@ -239,18 +303,21 @@ const Home = (() => {
     if (save) { try { localStorage.setItem(MODE_KEY, mode); } catch { /* preferenza non salvata */ } }
   }
 
-  function render(data, tt) {
+  function render(data, tt, selectedDate = null) {
     const today = isoDate(data.today);
     const byDay = {};
     eventsById = new Map();
     data.events.forEach((e) => { (byDay[e.date] ||= []).push(e); eventsById.set(e.id, e); });
+    eventData = data.events;
 
-    const keep = items.length ? clamp(Math.round(sel.scrollLeft / SLOT)) : startDay();
+    const selected = selectedDate || (items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : shiftDate(today, startDay()));
+    const keep = Math.max(0, Math.min(WINDOW_DAYS - 1, dayOffset(windowStart, selected)));
     sel.replaceChildren(); panels.replaceChildren(); list.replaceChildren();
     items = []; sections = []; secDay = []; doneRefs = new Map();
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(today); d.setDate(today.getDate() + i);
-      const labels = i < RELATIVE.length ? [RELATIVE[i]] : [String(d.getDate()), WEEKDAYS[d.getDay()]];
+    for (let i = 0; i < WINDOW_DAYS; i++) {
+      const d = dateAt(i), relativeDay = dayOffset(today, d);
+      const labels = relativeDay >= -1 && relativeDay <= 1
+        ? [RELATIVE[relativeDay + 1]] : [String(d.getDate()), WEEKDAYS[d.getDay()]];
 
       const btn = document.createElement("button");
       btn.type = "button"; btn.className = "day";
@@ -266,7 +333,7 @@ const Home = (() => {
 
       const sec = document.createElement("section");
       sec.className = "evday";
-      if (fillDay(sec, d, i, events, lessons)) {      // i giorni senza eventi non entrano nell'elenco
+      if (fillDay(sec, d, relativeDay, events, lessons)) { // i giorni senza eventi non entrano nell'elenco
         list.append(sec); sections.push(sec); secDay.push(i);
       }
     }
@@ -277,14 +344,44 @@ const Home = (() => {
     paint(keep);
   }
 
+  async function shiftWindow(direction) {
+    if (shifting || !items.length || !windowStart) return;
+    shifting = true;
+    const currentEnd = dateAt(WINDOW_DAYS - 1);
+    const nextStart = shiftDate(windowStart, direction * WINDOW_SHIFT);
+    const fetchStart = direction < 0 ? nextStart : shiftDate(currentEnd, 1);
+    const nextEnd = shiftDate(nextStart, WINDOW_DAYS - 1);
+    try {
+      const res = await api(`/api/events?start=${key(fetchStart)}&days=${WINDOW_SHIFT - 1}`);
+      if (!res.ok) throw new Error(res.status);
+      const chunk = await res.json();
+      if (driver || touching) return;    // l'utente ha ripreso a scorrere: render() ora farebbe saltare tutto; riproverà al prossimo stop
+      const selected = dateAt(clamp(Math.round(sel.scrollLeft / SLOT)));   // posizione di adesso, non di prima del fetch
+      eventData = [...eventData, ...chunk.events].filter((event) => event.date >= key(nextStart) && event.date <= key(nextEnd));
+      windowStart = nextStart;
+      render({ today: chunk.today, events: eventData }, timetableData, selected);
+      document.getElementById("status").textContent = "";
+    } catch (e) {
+      if (e instanceof LoginError) showLogin(e.message);
+      else document.getElementById("status").textContent = "Impossibile caricare altri eventi. Riprova.";
+    } finally {
+      shifting = false;
+    }
+  }
+
   async function load() {
     const status = document.getElementById("status");
     if (!items.length) status.textContent = "Caricamento…";   // agli aggiornamenti successivi niente lampeggio
+    if (!windowStart) windowStart = shiftDate(new Date(), -INITIAL_PAST);
+    const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
     try {
-      const [res, ttRes] = await Promise.all([api("/api/events?days=14"), api("/api/timetable")]);
+      const [res, ttRes] = await Promise.all([
+        api(`/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`), api("/api/timetable"),
+      ]);
       if (!res.ok) throw new Error(res.status);
       // orario non disponibile (404 o errore): la home mostra comunque gli eventi
-      render(await res.json(), ttRes.ok ? await ttRes.json() : null);
+      timetableData = ttRes.ok ? await ttRes.json() : null;
+      render(await res.json(), timetableData, selected);
       Calendar.load();   // non blocca la home: se fallisce il calendario resta nascosto
       status.textContent = "";
     } catch (e) {
@@ -301,9 +398,13 @@ const Home = (() => {
 
     for (const [el, src] of [[sel, "sel"], [panels, "view"], [list, "view"]]) {
       el.addEventListener("scroll", () => { if (src === "sel" || el === view().el()) onScroll(src); }, { passive: true });
-      ["touchstart", "pointerdown", "wheel"].forEach((ev) =>
-        el.addEventListener(ev, () => take(src), { passive: true }));
+      el.addEventListener("touchstart", () => { touching = true; take(src); }, { passive: true });
+      el.addEventListener("wheel", () => { take(src); arm(); }, { passive: true });
     }
+    // con lo scroll nativo i pointer event vengono cancellati: per la fine del gesto servono i touch event
+    const lift = (e) => { if (e.touches.length === 0) { touching = false; arm(); } };
+    window.addEventListener("touchend", lift, { passive: true });
+    window.addEventListener("touchcancel", lift, { passive: true });
     toggle.addEventListener("click", () => applyMode(mode === "orario" ? "eventi" : "orario"));
     window.addEventListener("resize", () => { if (items.length) view().snap(Math.round(sel.scrollLeft / SLOT)); });
 

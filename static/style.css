@@ -12,7 +12,7 @@
   --soft: #FFCCCC;
   --text: #FFFFFF;
   --error: #ff9c92;
-  --radius: 20px;
+  --radius: 35px;
   box-sizing: border-box;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -48,12 +48,19 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 /* Selettore dei giorni: ogni voce è larga 96px, la scala la imposta home.js */
 .daybar { display: flex; align-items: center; gap: 6px; }
 .days {
+  --anchor: 72px;   /* distanza del bordo sinistro della voce selezionata dal bordo sinistro del selettore */
   flex: 1; min-width: 0; display: flex; align-items: center;
   height: auto;
   overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* linea di aggancio = centro della voce selezionata (--anchor + 48px). Si aggancia al centro e non al
+     bordo perché la scala delle voci è centrata: il centro non si sposta mentre le voci cambiano
+     dimensione, quindi lo snap nativo non cade mai in un punto diverso da quello calcolato da home.js. */
+  scroll-padding-left: 0;
+  scroll-padding-right: max(0px, calc(100% - 2 * (var(--anchor) + 48px)));
 }
-.days::before, .days::after { content: ""; flex: 0 0 calc(50% - 48px); }
+.days::before { content: ""; flex: 0 0 var(--anchor); }
+.days::after  { content: ""; flex: 0 0 max(0px, calc(100% - var(--anchor) - 96px)); } /* così l'ultimo giorno può arrivare all'ancora */
 .days::-webkit-scrollbar { display: none; }
 .day {
   flex: 0 0 96px; scroll-snap-align: center;
@@ -62,6 +69,7 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
   font: 400 24px/1 "Figtree", system-ui, sans-serif;
   color: var(--muted); white-space: nowrap;
   transform: scale(.5417); /* 13px / 24px, come nel mockup */
+  will-change: transform;
 }
 .day span + span { margin-top: 2px; }
 
@@ -92,6 +100,20 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 .cal h2 { margin: 0 0 14px; font-size: 20px; line-height: 21px; font-weight: 400; text-align: center; }
 .cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
 .cal-week span { padding-bottom: 6px; font-size: 17px; text-align: center; border-bottom: 1px solid var(--line); }
+
+@media (orientation: landscape) and (min-width: 768px) {
+  main:has(#view-home:not([hidden])) { max-width: 1200px; }
+  #view-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: start;
+  }
+  #view-home .daybar, #view-home .status { grid-column: 1 / -1; }
+  #view-home #panels, #view-home #evlist { height: min(65vh, 560px); }
+  #view-home #cal { margin-top: 17px; }
+}
+
 .cd {
   font-family: inherit; background: none; border: 0; border-bottom: 1px solid var(--line); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -107,7 +129,7 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 .cd .ic svg { width: 14px; height: 14px; }
 
 /* Accesso */
-.card { background: var(--card); border-radius: var(--radius); padding: 24px 22px; display: flex; flex-direction: column; gap: 6px; }
+.card { background: var(--card); border-radius: var(--radius); padding: 19px 19px; display: flex; flex-direction: column; gap: 4px; }
 label { font-size: .85rem; color: var(--soft); margin-top: 10px; }
 input:not([type=checkbox]) {
   width: 100%; padding: 12px 14px;
@@ -175,7 +197,7 @@ button:disabled { opacity: .6; cursor: default; }
 #view-setup h1 { margin: 28px 0 8px; font-size: 1.7rem; }
 .lead { margin: 0 auto 18px; max-width: 260px; text-align: center; font-size: 12px; line-height: 15px; color: var(--text); }
 .lead b { font-weight: 700; }
-.cols { display: grid; grid-template-columns: 34px 1fr 34px; gap: 10px; padding: 0 4px 8px; font-size: 11px; color: var(--soft); }
+.cols { display: grid; grid-template-columns: 34px 1fr 34px; gap: 10px; padding: 0 4px 0px; font-size: 01rem; color: var(--soft); }
 .cols span:nth-child(2) { text-align: center; }
 .subj { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; gap: 10px; padding: 6px 4px; min-height: 40px; }
 .subj .name { text-align: center; font-size: 1.05rem; overflow-wrap: anywhere; }
@@ -219,9 +241,9 @@ button:disabled { opacity: .6; cursor: default; }
   border: 0; border-radius: 999px; cursor: pointer; box-shadow: 0 0 22px rgba(160, 29, 17, .55);
 }
 .pill:disabled { opacity: .6; cursor: default; }
+.nav > .primary { flex: 1; }
 #setup-body > .error { text-align: center; }
-#view-setup .welcome ~ .primary { width: 100%; margin-top: 18px; }
-button.primary { padding: 13px 22px; font: inherit; font-size: 1rem; color: var(--text); background: var(--red); border: 0; border-radius: 14px; cursor: pointer; }
+button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(--text); background: var(--red); border: 0; border-radius: 587px; cursor: pointer; }
 
 /* Bottom sheet: scheda dei giorni del calendario e degli eventi */
 body.sheet-open { overflow: hidden; }

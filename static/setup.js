@@ -93,6 +93,7 @@ const Setup = (() => {
   function renderWelcome(root) {
     const err = errorBox();
     const go = el("button", "primary", "Inizia"); go.type = "button";
+    const nav = el("div", "nav"); nav.append(go);
     go.addEventListener("click", async () => {
       go.disabled = true; go.textContent = "Carico la proposta…"; err.hidden = true;
       try {
@@ -109,7 +110,7 @@ const Setup = (() => {
       el("h1", "welcome", `Ciao ${firstName}`.trim() + ","),
       el("p", "welcome-sub", "grazie per usare BetterViva"),
       el("p", "hint", "Prepariamo insieme materie e orario. Ti proponiamo già tutto noi: devi solo controllare."),
-      err, go,
+      err, nav,
     );
   }
 
@@ -120,6 +121,7 @@ const Setup = (() => {
     cols.append(el("span", null, "Lab?"), el("span", null, "Materia"), el("span"));
 
     const list = el("div", "card rows");
+    list.append(cols);
     subjects.forEach((s) => {
       const row = el("div", "subj");
 
@@ -143,7 +145,7 @@ const Setup = (() => {
       row.append(box, name, edit);
       list.append(row);
     });
-    root.append(el("h1", null, "Configura le materie"), lead, cols, list,
+    root.append(el("h1", null, "Configura le materie"), lead, list,
       navBar(() => { step = 0; render(); }, "Configura l'orario", () => { step = 2; render(); }));
   }
 
@@ -207,7 +209,8 @@ const Setup = (() => {
       list.append(row);
     }
     const last = idx === total - 1;
-    root.append(el("h1", null, "Configura l'orario"), nav, list,
+    root.append(el("h1", null, "Configura l'orario"),
+      el("p", "lead", "Verifica che l'orario sia corretto"), nav, list,
       navBar(() => { step--; render(); }, last ? "Salva" : "Avanti", last ? save : () => { step++; render(); }));
   }
 
