@@ -22,7 +22,11 @@ async function kv(mode, fn) {
 }
 const dbGet = (k) => kv("readonly", (s) => s.get(k));
 const dbSet = (k, v) => kv("readwrite", (s) => s.put(v, k));
-const dbClear = () => kv("readwrite", (s) => s.clear());
+const dbDelete = (k) => kv("readwrite", (s) => s.delete(k));
+const dbClear = async () => {
+  await kv("readwrite", (s) => s.clear());
+  cacheScope = null;
+};
 
 /* ---------- Credenziali cifrate ----------
    La chiave AES è NON esportabile: il browser la usa ma nessuno script
@@ -89,14 +93,117 @@ function silentLogin() {
   return renewing;
 }
 
-// Da usare per TUTTE le chiamate future (eventi, ecc.): su 401 rinnova e riprova una volta
-async function api(path, options = {}) {
+let cacheScope = null;
+let cacheEpoch = 0;
+const cacheRefreshes = new Map();
+const cacheKey = (scope, path) => `api-cache:${scope}:${path}`;
+
+async function clearApiCache(scope = cacheScope) {
+  if (!scope) return;
+  const prefix = `api-cache:${scope}:`;
+  const db = await openDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const request = store.getAllKeys();
+    request.onsuccess = () => request.result
+      .filter((key) => typeof key === "string" && key.startsWith(prefix))
+      .forEach((key) => store.delete(key));
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function setCacheScope(scope) {
+  const previous = await dbGet("api-cache-scope");
+  if (previous && previous !== scope) await clearApiCache(previous);
+  if (previous !== scope) cacheEpoch++;
+  await dbSet("api-cache-scope", scope);
+  cacheScope = scope;
+}
+
+function cachedResponse(data) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// API requests renew an expired session once. GET responses are cached per account.
+async function fetchApi(path, options) {
   let res = await fetch(path, options);
   if (res.status === 401) {
     await silentLogin();
     res = await fetch(path, options);
   }
   return res;
+}
+
+function emitCacheEvent(name, detail) {
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+async function cacheSuccessfulResponse(path, response, scope) {
+  if (!response.ok) return response;
+  try {
+    const data = await response.clone().json();
+    if (scope === cacheScope) await dbSet(cacheKey(scope, path), { data });
+  } catch (error) {
+    console.error("Impossibile salvare la risposta API nella cache locale.", error);
+  }
+  return response;
+}
+
+async function api(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    const response = await fetchApi(path, options);
+    if (response.ok) {
+      cacheEpoch++;
+      try { await clearApiCache(); }
+      catch (error) { console.error("Impossibile invalidare la cache API locale.", error); }
+    }
+    return response;
+  }
+
+  const scope = cacheScope;
+  if (!scope || !path.startsWith("/api/") || path === "/api/me") {
+    return fetchApi(path, options);
+  }
+
+  let cached = null;
+  try { cached = await dbGet(cacheKey(scope, path)); }
+  catch (error) { console.error("Impossibile leggere la cache API locale.", error); }
+
+  const refresh = async () => {
+    const epoch = cacheEpoch;
+    const response = await fetchApi(path, options);
+    if (!response.ok) throw new Error(`Risposta API ${response.status}`);
+    const data = await response.clone().json();
+    if (scope === cacheScope && epoch === cacheEpoch) {
+      try {
+        await dbSet(cacheKey(scope, path), { data });
+        emitCacheEvent("bv-api-cache-update", { path, data });
+      } catch (error) {
+        console.error("Impossibile aggiornare la cache API locale.", error);
+      }
+    }
+    return response;
+  };
+
+  if (!cached) {
+    const response = await fetchApi(path, options);
+    return cacheSuccessfulResponse(path, response, scope);
+  }
+
+  const refreshKey = `${scope}:${path}`;
+  if (!cacheRefreshes.has(refreshKey)) {
+    const pending = refresh()
+      .catch((error) => emitCacheEvent("bv-api-cache-error", { path, error }))
+      .finally(() => cacheRefreshes.delete(refreshKey));
+    cacheRefreshes.set(refreshKey, pending);
+  }
+  return cachedResponse(cached.data);
 }
 
 /* ---------- Interfaccia ---------- */
@@ -106,30 +213,68 @@ const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCa
 function show(view) {
   $("view-login").hidden = view !== "login";
   $("view-setup").hidden = view !== "setup";
+  $("view-settings").hidden = view !== "settings";
   $("view-home").hidden = view !== "home";
-  $("avatar").hidden = view !== "home" && view !== "setup";
+  $("avatar").hidden = view !== "home" && view !== "setup" && view !== "settings";
+  $("settings-button").hidden = view !== "home";
   $("status").textContent = "";
 }
 
-function showHome() {
+function showHome(promptColors = false) {
   show("home");
   Home.load();
+  if (promptColors) Settings.promptColorSetup(() => showHome());
 }
 
 // Dopo l'accesso: se manca l'orario dell'anno in corso parte il setup, altrimenti la home
-async function enter() {
+async function enter(profileResponse = null) {
   let me = null;
   try {
-    const res = await api("/api/me");
-    if (res.ok) me = await res.json();
+    const res = profileResponse || await api("/api/me");
+    if (!res.ok) throw new Error(`Profilo non disponibile (${res.status}).`);
+    me = await res.json();
   } catch (e) {
     if (e instanceof LoginError) return showLogin(e.message);
+    if (await restoreOfflineHome()) return;
+    return showLogin("Server non raggiungibile. Riprova quando la connessione è disponibile.");
+  }
+  if (me.cache_scope) {
+    try {
+      await setCacheScope(me.cache_scope);
+      await dbSet(cacheKey(me.cache_scope, "/api/me"), { data: me });
+    } catch (error) {
+      cacheScope = null;
+      console.error("Impossibile inizializzare la cache locale per questo account.", error);
+    }
   }
   if (me && me.setup_needed) {
     show("setup");
     Setup.start(me.first_name || titleCase((me.name || "").split(" ")[0]), showHome);
   } else {
+    showHome(!!me?.color_setup_pending);
+  }
+}
+
+async function restoreOfflineHome() {
+  try {
+    const scope = await dbGet("api-cache-scope");
+    if (!scope) return false;
+    const db = await openDb();
+    const keys = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const request = tx.objectStore(STORE).getAllKeys();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    if (!keys.some((key) => typeof key === "string" && key.startsWith(`api-cache:${scope}:/api/events?`))) {
+      return false;
+    }
+    cacheScope = scope;
     showHome();
+    return true;
+  } catch (error) {
+    console.error("Impossibile ripristinare la sessione offline dalla cache locale.", error);
+    return false;
   }
 }
 
@@ -139,6 +284,12 @@ function showLogin(message = "") {
   err.hidden = !message;
   show("login");
 }
+
+window.addEventListener("bv-api-cache-error", ({ detail }) => {
+  if (detail.path === "/api/timetable" || detail.path === "/api/setup/timetable") {
+    $("status").textContent = "Dati salvati mostrati; impossibile aggiornarli dal server.";
+  }
+});
 
 async function logout() {
   await fetch("/api/logout", { method: "POST" }).catch(() => {});
@@ -159,6 +310,12 @@ $("login-form").addEventListener("submit", async (e) => {
     await postLogin(username, password);
     if ($("remember").checked) await saveCredentials(username, password);
     else await dbClear();
+    const previousScope = await dbGet("api-cache-scope");
+    if (previousScope) {
+      await clearApiCache(previousScope);
+      await dbDelete("api-cache-scope");
+    }
+    cacheScope = null;
     $("password").value = "";
     await enter();
   } catch (err) {
@@ -173,6 +330,8 @@ $("avatar").addEventListener("click", () => {
   if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) logout();
 });
 
+$("settings-button").addEventListener("click", () => Settings.open(showHome));
+
 // WebCrypto esiste solo su HTTPS o localhost: altrimenti niente salvataggio delle credenziali
 if (!window.crypto?.subtle) {
   $("remember").checked = false;
@@ -185,8 +344,9 @@ if (!window.crypto?.subtle) {
 (async function init() {
   try {
     const res = await fetch("/api/me");
-    if (res.ok) return enter();
+    if (res.ok) return enter(res);
   } catch {
+    if (await restoreOfflineHome()) return;
     $("status").textContent = "Server non raggiungibile.";
     return;
   }

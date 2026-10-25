@@ -6,6 +6,7 @@ password: la usa solo per il login e tiene in memoria l'istanza `Utente`
 Se il server si riavvia le sessioni si perdono: il frontend rifà il login
 in silenzio con le credenziali cifrate custodite nel browser.
 """
+import hashlib
 import json
 import logging
 import os
@@ -43,6 +44,30 @@ db.init_db()
 
 sessions: dict[str, dict] = {}         # sid -> {user: Utente, name, expires}
 attempts: dict[str, list[float]] = {}  # ip -> timestamp dei tentativi di login
+me_state_cache: dict[str, dict] = {}
+me_state_lock = threading.RLock()
+
+
+def load_me_state(student_id: str, year: str) -> dict:
+    """Carica dal database solo i dati di profilo non già presenti in RAM."""
+    with me_state_lock:
+        state = me_state_cache.get(student_id)
+        if state is None:
+            state = {"options": db.get_options(student_id), "timetables": {}}
+            me_state_cache[student_id] = state
+        if year not in state["timetables"]:
+            state["timetables"][year] = db.get_timetable(student_id, year) is not None
+        return state
+
+
+def update_me_state(student_id: str, *, options: dict | None = None) -> None:
+    """Aggiorna i dati già caricati in RAM dopo una scrittura riuscita."""
+    with me_state_lock:
+        state = me_state_cache.get(student_id)
+        if state is None:
+            return
+        if options is not None:
+            state["options"] = options
 
 
 class Credentials(BaseModel):
@@ -53,6 +78,7 @@ class Credentials(BaseModel):
 class SubjectIn(BaseModel):
     name: str | None = Field(default=None, max_length=timetable.MAX_NAME)  # None/"" = nome originale
     lab: bool = False                       # la materia ha laboratorio
+    color: str | None = None
 
 
 class CellIn(BaseModel):
@@ -65,6 +91,10 @@ class CellIn(BaseModel):
 class SetupIn(BaseModel):
     subjects: dict[int, SubjectIn] = Field(default_factory=dict, max_length=60)  # id materia -> config
     cells: list[CellIn] = Field(max_length=84)
+
+
+class SubjectsIn(BaseModel):
+    subjects: dict[int, SubjectIn] = Field(default_factory=dict, max_length=60)
 
 
 def norm_username(username: str) -> str:
@@ -200,8 +230,23 @@ def me(request: Request):
     """
     s = current_session(request)
     year = timetable.school_year(date.today())
-    return {"name": s["name"], "first_name": s.get("first_name", ""), "school_year": year,
-            "setup_needed": db.get_timetable(s["studentId"], year) is None}
+    student_id = s["studentId"]
+    with me_state_lock:
+        state = load_me_state(student_id, year)
+        options = state["options"]
+        subject_config = options.get("subject_config", {})
+        has_subject_colors = any(
+            isinstance(subject, dict) and subject.get("color") in timetable.SUBJECT_COLORS
+            for subject in subject_config.values()
+        )
+        return {
+            "name": s["name"], "first_name": s.get("first_name", ""), "school_year": year,
+            "cache_scope": hashlib.sha256(student_id.encode()).hexdigest(),
+            "setup_needed": not state["timetables"][year],
+            "color_setup_pending": not has_subject_colors
+            and not options.get("color_settings_configured")
+            and not options.get("color_setup_dismissed"),
+        }
 
 
 def subject_names(s: dict) -> dict[int, str]:
@@ -467,11 +512,51 @@ def save_setup(body: SetupIn, request: Request):
     except ValueError as e:
         raise HTTPException(422, str(e))
     year = timetable.school_year(date.today())
-    db.save_setup(s["studentId"], year, {"version": 1, "cells": cells}, {"subject_config": config})
+    with me_state_lock:
+        db.save_setup(s["studentId"], year, {"version": 1, "cells": cells},
+                      {"subject_config": config, "color_settings_configured": True})
+        state = me_state_cache.get(s["studentId"])
+        if state is not None:
+            state["options"] = {
+                **state["options"], "subject_config": config, "color_settings_configured": True,
+            }
+            state["timetables"][year] = True
     s.pop("setup", None)
     s.pop("events", None)   # gli eventi dipendono dall'orario
     s.pop("calendar", None)
     return {"school_year": year, "cells": len(cells)}
+
+
+@app.put("/api/subjects")
+def save_subjects(body: SubjectsIn, request: Request):
+    """Convalida e salva le preferenze delle materie senza modificare l'orario."""
+    s = current_session(request)
+    try:
+        subjects = load_subjects(s)
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("subjects: errore nel recupero delle materie")
+        raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
+    try:
+        config, _ = timetable.validate_setup(
+            {sid: subject.model_dump() for sid, subject in body.subjects.items()}, [], subjects)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    with me_state_lock:
+        options = db.update_options(s["studentId"], {"subject_config": config, "color_settings_configured": True})
+        update_me_state(s["studentId"], options=options)
+    s.pop("events", None)
+    s.pop("calendar", None)
+    return {"subjects": len(config)}
+
+
+@app.put("/api/settings/color-prompt-dismissed")
+def dismiss_color_prompt(request: Request):
+    """Memorizza che l'utente preferisce configurare i colori più tardi."""
+    s = current_session(request)
+    with me_state_lock:
+        options = db.update_options(s["studentId"], {"color_setup_dismissed": True})
+        update_me_state(s["studentId"], options=options)
+    return {"ok": True}
 
 
 @app.post("/api/logout")
@@ -482,7 +567,9 @@ async def logout(request: Request, response: Response):
     test dal database. Restituisce `{"ok": true}` al termine.
     """
     if current_session(request)["studentId"] == "testuser":
-        db.delete_user("testuser")
+        with me_state_lock:
+            db.delete_user("testuser")
+            me_state_cache.pop("testuser", None)
     sessions.pop(request.cookies.get(COOKIE), None)
     response.delete_cookie(COOKIE)
     

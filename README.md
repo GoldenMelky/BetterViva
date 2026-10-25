@@ -20,9 +20,13 @@ Usa le API che Spaggiari usa nella sua app mobile, vengono riformattate unifican
 
 Giustamente per ottenere i dati del tuo account ClasseViva, servono le credenziali che sì, passerano per il backend, ma non verranno mai salvate, viene generato un token di accesso valido 90 minuti, che resta in memoria per un accesso veloce.
 
-Le credenziali sono salvate nella cache del browser e vengono mandate al backend ogni volta che il token scade.
+Le credenziali possono essere salvate cifrate nel browser e vengono mandate al backend ogni volta che il token scade.
 
-Le uniche informazioni che vengono salvate sono la configurazione dell'orario e la rinominazione delle materie.
+Eventi, orario, calendario e configurazione vengono conservati in IndexedDB per account e mostrati subito alle aperture successive; l'app li aggiorna in background quando il server è raggiungibile. Il logout elimina i dati personali memorizzati localmente. Anche HTML, JavaScript, CSS e gli altri asset statici vengono serviti dalla cache mentre si aggiornano in background.
+
+Sul backend, le opzioni e la presenza dell'orario lette da `/api/me` restano in RAM per tutta la vita del processo; i salvataggi effettuati dall'app aggiornano immediatamente questi valori.
+
+Sul server vengono salvate la configurazione dell'orario e le preferenze delle materie (nome, laboratorio e colore); la cache locale include anche i dati necessari a mostrare eventi e calendario senza attesa.
 
 ## Analittica
 
@@ -38,6 +42,8 @@ Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di 
 - [ ] Note
 - [ ] Altre funzioni di ClasseViva
 - [ ] Temi
-- [ ] Impostazioni
+- [x] Impostazioni
 - [ ] Renderlo serverless
 - [ ] Sistema caching decente
+- [x] Colori per materia
+- [ ] Feedback

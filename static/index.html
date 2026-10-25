@@ -17,6 +17,9 @@
 <body>
   <header class="top">
     <span class="logo">BetterViva</span>
+    <button id="settings-button" class="header-button" type="button" hidden aria-label="Impostazioni" title="Impostazioni">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.7v-2.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
     <button id="avatar" class="avatar" hidden aria-label="Esci" title="Esci"></button>
   </header>
 
@@ -45,6 +48,10 @@
     <!-- Setup iniziale: benvenuto, materie, orario (un giorno per volta) -->
     <section id="view-setup" hidden>
       <div id="setup-body"></div>
+    </section>
+
+    <section id="view-settings" hidden>
+      <div id="settings-body"></div>
     </section>
 
     <!-- Home: giorni (scorrono) + eventi del giorno (scorrono insieme) -->
@@ -78,6 +85,7 @@
   <script src="/static/calendar.js"></script>
   <script src="/static/home.js"></script>
   <script src="/static/setup.js"></script>
+  <script src="/static/settings.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/pwa.js"></script>
 </body>

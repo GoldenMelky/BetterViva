@@ -1,14 +1,13 @@
 "use strict";
 
 /* Service worker di BetterViva.
-   - Guscio dell'app (pagina, JS, CSS, font, icone) in cache, con strategia "prima la rete":
-     si prova sempre il server e la copia serve solo se si è offline. Così dopo un
-     aggiornamento si vede subito la versione nuova, senza file vecchi bloccati.
-   - /api/* non passa mai di qui: sono dati personali di ClasseViva, sempre dal server. */
+   - Il guscio dell'app viene servito subito dalla cache; la rete aggiorna la copia
+     per l'apertura successiva.
+   - /api/* non passa mai di qui: i dati personali sono gestiti in IndexedDB per account. */
 const CACHE = "betterviva-v1";   // cambialo solo se vuoi forzare la pulizia della cache
 const SHELL = [
   "/",
-  "/static/style.css", "/static/home.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/app.js",
+  "/static/style.css", "/static/home.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js",
   "/static/manifest.webmanifest",
   "/static/fonts/inter-latin-400-normal.woff2", "/static/fonts/figtree-latin-400-normal.woff2",
   "/static/fonts/dongle-latin-400-normal.woff2",
@@ -37,15 +36,16 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;                      // mai in cache
   if (url.pathname !== "/" && !url.pathname.startsWith("/static/")) return;
 
+  const network = fetch(req, { cache: "no-cache" }).then(async (res) => {
+    if (res.ok) await (await caches.open(CACHE)).put(req, res.clone());
+    return res;
+  });
+  event.waitUntil(network.catch((err) => console.error("Aggiornamento asset non riuscito.", err)));
   event.respondWith((async () => {
-    try {
-      const res = await fetch(req, { cache: "no-cache" });          // rivalida anche la cache HTTP/Cloudflare
-      if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
-      return res;
-    } catch (err) {
-      const cached = await caches.match(req, { ignoreSearch: true });
-      if (cached) return cached;
-      throw err;
+    const cached = await caches.match(req, { ignoreSearch: true });
+    if (cached) {
+      return cached;
     }
+    return network;
   })());
 });

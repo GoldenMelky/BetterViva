@@ -26,6 +26,7 @@ LOOKBACK_DAYS = 28      # quanto indietro andare a leggere le lezioni (basta 1 r
 MAX_HPOS = 12
 MIN_SLOTS = 6           # righe mostrate al minimo (se non ci sono dati)
 MAX_NAME = 40           # lunghezza massima di un nome materia scelto dall'utente
+SUBJECT_COLORS = ("red", "green", "blue", "yellow", "brown", "purple", "orange", "teal", "pink")
 LAB_TYPE = "Attività di laboratorio"
 COMPRESENCE = "LSC0"    # riga di compresenza: secondo docente nell'ora
 # Dizionario materia intera -> nome breve: {"MATEMATICA E COMPLEMENTI": "Matematica", ...}
@@ -182,8 +183,8 @@ def validate_setup(config_in: dict[int, dict], cells: list[dict],
     """Controlla e normalizza la configurazione inviata dal client.
 
     Ritorna (config, cells):
-    - config: {"<id materia>": {"name": str | None, "lab": bool}}, solo per le
-      materie rinominate o con laboratorio;
+    - config: {"<id materia>": {"name": str | None, "lab": bool, "color": str | None}},
+      solo per le materie personalizzate;
     - cells: orario senza celle vuote, con il nome originale della materia
       (preso dal server, mai dal client).
     Solleva ValueError se qualcosa non va.
@@ -195,8 +196,11 @@ def validate_setup(config_in: dict[int, dict], cells: list[dict],
         if sid not in known:
             raise ValueError("Materia non valida per questo studente.")
         name, lab = _clean_name(c.get("name")), bool(c.get("lab"))
-        if name or lab:
-            config[str(sid)] = {"name": name, "lab": lab}
+        color = c.get("color")
+        if color is not None and color not in SUBJECT_COLORS:
+            raise ValueError("Colore materia non valido.")
+        if name or lab or color:
+            config[str(sid)] = {"name": name, "lab": lab, "color": color}
 
     seen: set[tuple[int, int]] = set()
     out = []

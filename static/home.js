@@ -13,13 +13,15 @@ const Home = (() => {
   const WEEKDAYS = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const KIND = { verifica: "Verifica", interrogazione: "Interrogazione" };
+  const SUBJECT_COLORS = new Set(["red", "green", "blue", "yellow", "brown", "purple", "orange", "teal", "pink"]);
   const startDay = () => new Date().getHours() < 12 ? 0 : 1;
   const MODE_KEY = "bv_home_mode";
   const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
 
   let sel, panels, list, toggle;
   let items = [], sections = [], secDay = [], doneRefs = new Map(), eventsById = new Map();
-  let windowStart = null, eventData = [], timetableData = null, shifting = false;
+  let windowStart = null, eventData = [], timetableData = null, homeData = null, shifting = false;
+  let loading = false, pendingEvents = null, pendingTimetable = null, hasPendingTimetable = false;
   let mode = "orario", driver = null, timer = null;
   let touching = false, glideId = 0;     // dito appoggiato / animazione del selettore in corso
   const SETTLE_MS = 120;
@@ -79,6 +81,11 @@ const Home = (() => {
 
   function line(tag, cls, text) { const el = document.createElement(tag); el.className = cls; el.textContent = text; return el; }
 
+  function colorSubject(node, subjectId, subjectConfig) {
+    const color = subjectConfig?.[String(subjectId)]?.color;
+    if (SUBJECT_COLORS.has(color)) node.dataset.color = color;
+  }
+
   /* ---- riga di un evento: testo (apre la scheda) + checkbox se è un compito ---- */
   function eventLine(e) {
     const p = line("p", "ev", e.text || "");
@@ -127,8 +134,9 @@ const Home = (() => {
 
   const isHomework = (e) => Array.isArray(e.source) && e.source.includes("homework");
 
-  function eventRow(e) {
+  function eventRow(e, compact = false) {
     const row = document.createElement("div"); row.className = "ev-row";
+    if (compact) row.classList.add("ev-row-compact");
     row.append(eventLine(e));
     let chk = null;
     if (!e.kind) {
@@ -147,31 +155,62 @@ const Home = (() => {
   const hasRow = (e) => e.text || isHomework(e);
 
   /* ---- vista orario ---- */
-  function fillPanel(panel, events, lessons) {
+  function fillPanel(panel, events, lessons, subjectConfig) {
     const used = new Set();
+    const addEventBadges = (heading, matching) => {
+      [...new Set(matching.map((event) => event.kind).filter(Boolean))]
+        .forEach((kind) => heading.append(line("span", "badge", KIND[kind] || kind)));
+    };
+    const makeClickable = (box, event) => {
+      if (!event) return;
+      box.classList.add("event-clickable");
+      box.tabIndex = 0;
+      box.setAttribute("role", "group");
+      box.setAttribute("aria-label", `${event.subject || "Evento"}: apri i dettagli`);
+      const open = () => EventSheet.showEvent(event);
+      box.addEventListener("click", (click) => {
+        if (click.target.closest("button, .ev")) return;
+        open();
+      });
+      box.addEventListener("keydown", (key) => {
+        if (key.target !== box || (key.key !== "Enter" && key.key !== " ")) return;
+        key.preventDefault();
+        open();
+      });
+    };
     lessons.forEach((l) => {
       const box = document.createElement("div"); box.className = "event";
-      box.append(line("h2", "", `${l.hpos}° ${l.name}`));
+      colorSubject(box, l.id, subjectConfig);
+      const heading = line("h2", "", "");
+      heading.append(line("span", "event-hour", `${l.hpos}°`), line("span", "event-subject", l.name));
+      box.append(heading);
+      const matching = events.filter((e) => !used.has(e) && e.subject_id === l.id);
+      makeClickable(box, matching.find((e) => e.text || isHomework(e)));
+      addEventBadges(heading, matching);
       // gli eventi della materia stanno sotto la sua prima ora del giorno
-      events.forEach((e) => {
+      matching.forEach((e) => {
         if (used.has(e) || e.subject_id !== l.id) return;
         used.add(e);
-        if (hasRow(e)) box.append(eventRow(e));
+        if (hasRow(e)) box.append(eventRow(e, true));
       });
       panel.append(box);
     });
     // eventi senza ora (giorno senza orario o materia non in orario)
     events.filter((e) => !used.has(e)).forEach((e) => {
       const box = document.createElement("div"); box.className = "event";
-      box.append(line("h2", "", e.subject || "Evento"));
-      if (hasRow(e)) box.append(eventRow(e));
+      colorSubject(box, e.subject_id, subjectConfig);
+      const heading = line("h2", "", e.subject || "Evento");
+      addEventBadges(heading, [e]);
+      box.append(heading);
+      makeClickable(box, e.text || isHomework(e) ? e : null);
+      if (hasRow(e)) box.append(eventRow(e, true));
       panel.append(box);
     });
     if (!panel.children.length) panel.append(line("p", "empty", "Nessun evento"));
   }
 
   /* ---- vista eventi: elenco verticale, con l'ora se la materia è in orario ---- */
-  function fillDay(sec, d, relativeDay, events, lessons) {
+  function fillDay(sec, d, relativeDay, events, lessons, subjectConfig) {
     if (!events.length) return false;
     const head = document.createElement("h2"); head.className = "dayhead";
     if (relativeDay >= -1 && relativeDay <= 1) {
@@ -188,8 +227,11 @@ const Home = (() => {
       .sort((a, b) => (a.l ? a.l.hpos : 99) - (b.l ? b.l.hpos : 99))
       .forEach(({ e, l }) => {
         const card = document.createElement("div"); card.className = "evcard";
+        colorSubject(card, e.subject_id, subjectConfig);
         const title = document.createElement("div"); title.className = "evtitle";
-        title.append(line("h3", "", l ? `${l.hpos}° ${l.name}` : e.subject || "Evento"));
+        const subject = line("h3", "", l ? l.name : e.subject || "Evento");
+        if (l) subject.append(line("span", "ev-hour", `${l.hpos}° ora`));
+        title.append(subject);
         if (e.kind) title.append(line("span", "badge", KIND[e.kind] || e.kind));
         card.append(title);
         if (hasRow(e)) card.append(eventRow(e));
@@ -304,6 +346,7 @@ const Home = (() => {
   }
 
   function render(data, tt, selectedDate = null) {
+    homeData = data;
     const today = isoDate(data.today);
     const byDay = {};
     eventsById = new Map();
@@ -328,12 +371,12 @@ const Home = (() => {
       const panel = document.createElement("div");
       panel.className = "panel";
       const events = byDay[key(d)] || [], lessons = lessonsOf(tt, d);
-      fillPanel(panel, events, lessons);
+      fillPanel(panel, events, lessons, tt?.subjects);
       panels.append(panel);
 
       const sec = document.createElement("section");
       sec.className = "evday";
-      if (fillDay(sec, d, relativeDay, events, lessons)) { // i giorni senza eventi non entrano nell'elenco
+      if (fillDay(sec, d, relativeDay, events, lessons, tt?.subjects)) { // i giorni senza eventi non entrano nell'elenco
         list.append(sec); sections.push(sec); secDay.push(i);
       }
     }
@@ -373,6 +416,8 @@ const Home = (() => {
     const status = document.getElementById("status");
     if (!items.length) status.textContent = "Caricamento…";   // agli aggiornamenti successivi niente lampeggio
     if (!windowStart) windowStart = shiftDate(new Date(), -INITIAL_PAST);
+    loading = true;
+    pendingEvents = null; pendingTimetable = null; hasPendingTimetable = false;
     const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
     try {
       const [res, ttRes] = await Promise.all([
@@ -380,15 +425,41 @@ const Home = (() => {
       ]);
       if (!res.ok) throw new Error(res.status);
       // orario non disponibile (404 o errore): la home mostra comunque gli eventi
-      timetableData = ttRes.ok ? await ttRes.json() : null;
-      render(await res.json(), timetableData, selected);
+      timetableData = hasPendingTimetable ? pendingTimetable : ttRes.ok ? await ttRes.json() : null;
+      const data = pendingEvents || await res.json();
+      loading = false;
+      render(data, timetableData, selected);
       Calendar.load();   // non blocca la home: se fallisce il calendario resta nascosto
       status.textContent = "";
     } catch (e) {
+      loading = false;
       if (e instanceof LoginError) showLogin(e.message);
       else status.textContent = "Impossibile caricare gli eventi. Riprova tra poco.";
     }
   }
+
+  window.addEventListener("bv-api-cache-update", ({ detail }) => {
+    if (detail.path === `/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`) {
+      if (loading) { pendingEvents = detail.data; return; }
+      const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
+      render(detail.data, timetableData, selected);
+      document.getElementById("status").textContent = "";
+    } else if (detail.path === "/api/timetable") {
+      if (loading) { pendingTimetable = detail.data; hasPendingTimetable = true; return; }
+      timetableData = detail.data;
+      if (homeData) {
+        const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
+        render(homeData, timetableData, selected);
+      }
+      document.getElementById("status").textContent = "";
+    }
+  });
+
+  window.addEventListener("bv-api-cache-error", ({ detail }) => {
+    if (detail.path.startsWith("/api/events?") || detail.path === "/api/timetable") {
+      document.getElementById("status").textContent = "Dati salvati mostrati; impossibile aggiornarli dal server.";
+    }
+  });
 
   function init() {
     sel = document.getElementById("days");

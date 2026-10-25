@@ -11,6 +11,7 @@ const Calendar = (() => {
     interrogazione: SVG('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/>'),
   };
   const NAME = { verifica: "Verifica", interrogazione: "Interrogazione" };
+  let loading = false, pendingData = null;
 
   const isoDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
   const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -51,13 +52,23 @@ const Calendar = (() => {
   }
 
   async function load() {
+    loading = true;
+    pendingData = null;
     try {
       const res = await api("/api/calendar");
-      if (res.ok) render(await res.json());
+      if (res.ok) render(pendingData || await res.json());
     } catch (e) {
       // il calendario è accessorio: se non si carica resta nascosto
+    } finally {
+      loading = false;
     }
   }
+
+  window.addEventListener("bv-api-cache-update", ({ detail }) => {
+    if (detail.path !== "/api/calendar") return;
+    if (loading) pendingData = detail.data;
+    else render(detail.data);
+  });
 
   return { load };
 })();
