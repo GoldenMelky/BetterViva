@@ -9,7 +9,7 @@
   - [ ] Correggere la posizione in modalità orizzontale (landscape)
 - [ ] **Tasto Indietro:** Garantire una posizione fissa/coerente e verificare il funzionamento sia del tasto fisico sia di quello a schermo
 - [ ] **Colori:** Mostrare comunque un bordo visibile quando viene selezionato "nessun colore"
-- [ ] Colore de, testo di descrizione deve richiamare il colore principale (es. voti)
+- [ ] Colore del testo di descrizione deve richiamare il colore principale (es. voti)
 
 ---
 

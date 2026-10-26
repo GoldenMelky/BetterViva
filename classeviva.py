@@ -103,7 +103,7 @@ class Utente:
     def voti(self):
         # Recupera i voti dello studente
         endpoint = apiUrl + f"v1/students/{self.login['studentId']}/grades"
-        response = requests.get(endpoint, headers=self.headers)
+        response = requests.get(endpoint, headers=self.headers, timeout=15)
         return json.loads(response.text)
 
     def note(self):

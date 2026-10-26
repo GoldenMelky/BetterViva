@@ -215,15 +215,19 @@ function show(view) {
   $("view-setup").hidden = view !== "setup";
   $("view-settings").hidden = view !== "settings";
   $("view-home").hidden = view !== "home";
-  $("avatar").hidden = view !== "home" && view !== "setup" && view !== "settings";
+  $("view-grades").hidden = view !== "grades";
+  $("avatar").hidden = view !== "home" && view !== "grades" && view !== "setup" && view !== "settings";
   $("settings-button").hidden = view !== "home";
+  $("menu-button").hidden = view !== "home" && view !== "grades";
+  $("app-menu").hidden = true;
+  $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
 }
 
 function showHome(promptColors = false) {
   show("home");
   Home.load();
-  if (promptColors) Settings.promptColorSetup(() => showHome());
+  if (promptColors === true) Settings.promptColorSetup(() => showHome());
 }
 
 // Dopo l'accesso: se manca l'orario dell'anno in corso parte il setup, altrimenti la home
@@ -331,6 +335,14 @@ $("avatar").addEventListener("click", () => {
 });
 
 $("settings-button").addEventListener("click", () => Settings.open(showHome));
+$("menu-button").addEventListener("click", () => {
+  const menu = $("app-menu");
+  menu.hidden = !menu.hidden;
+  $("menu-button").setAttribute("aria-expanded", String(!menu.hidden));
+});
+$("menu-home").addEventListener("click", () => showHome());
+$("menu-grades").addEventListener("click", () => Grades.open());
+$("menu-settings").addEventListener("click", () => Settings.open(showHome));
 
 // WebCrypto esiste solo su HTTPS o localhost: altrimenti niente salvataggio delle credenziali
 if (!window.crypto?.subtle) {

@@ -7,7 +7,7 @@
 const CACHE = "betterviva-v1";   // cambialo solo se vuoi forzare la pulizia della cache
 const SHELL = [
   "/",
-  "/static/style.css", "/static/home.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js",
+  "/static/style.css", "/static/home.js", "/static/grades.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js",
   "/static/manifest.webmanifest",
   "/static/fonts/inter-latin-400-normal.woff2", "/static/fonts/figtree-latin-400-normal.woff2",
   "/static/fonts/dongle-latin-400-normal.woff2",

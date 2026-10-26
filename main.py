@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import db
+import grades
 import overrides
 import timetable
 from classeviva import Utente
@@ -95,6 +96,10 @@ class SetupIn(BaseModel):
 
 class SubjectsIn(BaseModel):
     subjects: dict[int, SubjectIn] = Field(default_factory=dict, max_length=60)
+
+
+class GradeAverageModeIn(BaseModel):
+    mode: Literal["all_grades", "average_of_averages"] = grades.DEFAULT_AVERAGE_MODE
 
 
 def norm_username(username: str) -> str:
@@ -242,6 +247,11 @@ def me(request: Request):
         return {
             "name": s["name"], "first_name": s.get("first_name", ""), "school_year": year,
             "cache_scope": hashlib.sha256(student_id.encode()).hexdigest(),
+            "grade_average_mode": (
+                options.get("grade_average_mode")
+                if options.get("grade_average_mode") in grades.AVERAGE_MODES
+                else grades.DEFAULT_AVERAGE_MODE
+            ),
             "setup_needed": not state["timetables"][year],
             "color_setup_pending": not has_subject_colors
             and not options.get("color_settings_configured")
@@ -386,6 +396,37 @@ def calendar(request: Request):
             "events": [e for e in events if e["kind"]]}
     s["calendar"] = {"at": time.time(), "day": today.isoformat(), "data": data}
     return data
+
+
+@app.get("/api/grades")
+def get_grades(request: Request):
+    """Restituisce voti grezzi e medie annuali/per periodo."""
+    s = current_session(request)
+    cached = s.get("grades")
+    if not cached or time.time() - cached["at"] >= 600:
+        try:
+            response = s["user"].voti()
+            raw_grades = response["grades"]
+            if not isinstance(raw_grades, list):
+                raise TypeError("La lista dei voti non è valida.")
+        except (requests.RequestException, KeyError, ValueError, TypeError):
+            log.exception("grades: errore nel recupero dei voti")
+            raise HTTPException(502, "ClasseViva non ha restituito i dati dei voti. Riprova più tardi.")
+        s["grades"] = {"at": time.time(), "data": raw_grades}
+        cached = s["grades"]
+
+    options = db.get_options(s["studentId"])
+    average_mode = options.get("grade_average_mode", grades.DEFAULT_AVERAGE_MODE)
+    if average_mode not in grades.AVERAGE_MODES:
+        average_mode = grades.DEFAULT_AVERAGE_MODE
+    try:
+        return grades.build_grade_data(
+            cached["data"], average_mode,
+            options.get("subject_config", {}), timetable.short_names(),
+        )
+    except (KeyError, TypeError, ValueError):
+        log.exception("grades: errore nella normalizzazione dei voti")
+        raise HTTPException(502, "ClasseViva non ha restituito dati dei voti validi.")
 
 
 _subjects_lock = threading.Lock()
@@ -557,6 +598,16 @@ def dismiss_color_prompt(request: Request):
         options = db.update_options(s["studentId"], {"color_setup_dismissed": True})
         update_me_state(s["studentId"], options=options)
     return {"ok": True}
+
+
+@app.put("/api/settings/grade-average-mode")
+def set_grade_average_mode(body: GradeAverageModeIn, request: Request):
+    """Memorizza la modalità di calcolo della media mostrata."""
+    s = current_session(request)
+    with me_state_lock:
+        options = db.update_options(s["studentId"], {"grade_average_mode": body.mode})
+        update_me_state(s["studentId"], options=options)
+    return {"grade_average_mode": body.mode}
 
 
 @app.post("/api/logout")

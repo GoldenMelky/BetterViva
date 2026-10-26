@@ -305,6 +305,13 @@ button:disabled { opacity: .6; cursor: default; }
 .settings-edit { background: var(--red); }
 .settings-footer { margin-top: 24px; }
 .settings-footer .secondary { background: var(--card); }
+.settings-average-label { display: block; margin-top: 24px; color: var(--text); font-size: 1rem; }
+.settings-average-mode {
+  width: 100%; margin-top: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px;
+  color: var(--text); background: var(--card); font: inherit;
+}
+.settings-average-mode:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.settings-average-hint { margin: 7px 0 0; color: var(--soft); font-size: .8rem; }
 .color-prompt-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.68); }
 .color-prompt { width: min(100%, 420px); padding: 24px; border: 1px solid var(--line); border-radius: 24px; background: var(--card); box-shadow: 0 18px 60px rgba(0,0,0,.45); }
 .color-prompt h2 { margin: 0 0 10px; font-size: 1.4rem; font-weight: 600; text-align: center; }
@@ -315,6 +322,116 @@ button:disabled { opacity: .6; cursor: default; }
 .color-prompt-actions .secondary { background: var(--line); }
 .color-prompt-error { text-align: center; }
 button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(--text); background: var(--red); border: 0; border-radius: 587px; cursor: pointer; }
+
+/* Voti */
+#view-grades { padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
+#grades-body { min-height: 55vh; }
+.grade-period-nav { display: flex; align-items: center; gap: 8px; margin: 1px -22px 44px; }
+.grade-period-tabs {
+  display: flex; flex: 1; align-items: center; gap: 24px; min-width: 0;
+  padding: 0 22px; overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: none; scroll-behavior: smooth;
+}
+.grade-period-tabs::-webkit-scrollbar { display: none; }
+.grade-period-spacer { flex: 0 0 0; }
+.grade-period-back {
+  flex: 0 0 36px; width: 36px; height: 36px; margin-left: 14px; padding: 0;
+  border: 0; border-radius: 50%; color: var(--text); background: var(--card);
+  font: 400 2rem/1 "Figtree", sans-serif; cursor: pointer;
+}
+.grade-period-tab {
+  flex: 0 0 auto; padding: 5px 0; border: 0; color: var(--muted); background: none;
+  font: inherit; font-size: .82rem; white-space: nowrap; cursor: pointer;
+}
+.grade-period-tab.active { color: var(--text); font-size: 1.35rem; }
+.grade-summary { display: flex; align-items: center; gap: 40px; min-height: 100px; margin: 0 8px 52px; }
+.grade-ring {
+  --grade-color: #48df3d;
+  position: relative; flex: 0 0 98px; width: 98px; aspect-ratio: 1;
+  display: grid; place-items: center; border-radius: 50%; color: var(--grade-color);
+}
+.grade-ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.grade-ring-track, .grade-ring-fill { fill: none; stroke: currentColor; stroke-width: 6; }
+.grade-ring-track { opacity: .25; }
+.grade-ring-fill { stroke-linecap: round; }
+.grade-ring span { position: relative; color: var(--grade-color); font-size: 1.55rem; font-weight: 600; }
+.grade-ring.orange { --grade-color: #ff9d32; }
+.grade-ring.red { --grade-color: #ed4038; }
+.grade-ring.blue { --grade-color: #48a9ff; }
+.grade-summary-text { min-width: 0; }
+.grade-summary-text h1 { margin: 0; font-size: 1.45rem; line-height: 1.15; text-align: left; overflow-wrap: anywhere; }
+.grade-summary-text p { margin: 7px 0 0; color: var(--soft); font-size: .8rem; }
+.grade-subject-list, .grade-list { display: flex; flex-direction: column; gap: 12px; }
+.grade-subject-row {
+  display: flex; align-items: center; gap: 16px; width: 100%; min-height: 45px;
+  padding: 8px 10px; border: 0; border-radius: 17px; color: var(--text); background: #4d1010;
+  text-align: left; cursor: pointer;
+}
+.grade-average-bar {
+  position: relative; display: block; flex: 0 0 86px; height: 26px; overflow: hidden;
+  border-radius: 999px; text-align: center;
+}
+.grade-average-bar.green { background: #193f17; }
+.grade-average-bar.orange { background: #603d1d; }
+.grade-average-bar.red { background: #66120e; }
+.grade-average-bar.blue { background: #1d3f5c; }
+.grade-average-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: inherit; }
+.grade-average-bar.green .grade-average-fill { background: #3f9338; }
+.grade-average-bar.orange .grade-average-fill { background: #ff9d32; }
+.grade-average-bar.red .grade-average-fill { background: #e3261d; }
+.grade-average-bar.blue .grade-average-fill { background: #48a9ff; }
+.grade-average-label {
+  position: absolute; inset: 0; z-index: 1; color: #fff; font-size: 0.9rem;
+  font-weight: 700; line-height: 26px; text-align: center;
+}
+.grade-average-label-filled { width: 86px; color: #160606; }
+.grade-value {
+  flex: 0 0 auto; min-width: 66px; padding: 7px 9px; border-radius: 999px;
+  color: #fff; font-size: .95rem; font-weight: 700; text-align: center;
+}
+.grade-value.green { background: #3f9338; }
+.grade-value.orange { background: #f98f1c; }
+.grade-value.red { background: #e3261d; }
+.grade-value.blue { background: #48a9ff; }
+.grade-subject-name { flex: 1; min-width: 0; font-size: 1.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grade-subject-count { flex: 0 0 auto; color: var(--soft); font-size: .78rem; }
+.grade-empty, .grade-loading, .grade-error { margin: 32px 0; color: var(--soft); text-align: center; }
+.grade-retry, .grade-back {
+  display: block; margin: 18px auto 0; padding: 11px 18px; border: 0; border-radius: 999px;
+  color: var(--text); background: var(--red); font: inherit; cursor: pointer;
+}
+.grade-subject-summary { margin-bottom: 52px; }
+.grade-row {
+  display: flex; align-items: center; gap: 16px; width: 100%; min-height: 54px;
+  padding: 9px 10px; border: 0; border-radius: 17px; color: var(--text); text-align: left; cursor: pointer;
+}
+.grade-row.green { background: #173d16; }
+.grade-row.orange { background: #54200d; }
+.grade-row.red { background: #560e0e; }
+.grade-row.blue { background: #102d4b; }
+.grade-row-text { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 1px; }
+.grade-row-note { overflow: hidden; font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
+.grade-row-meta { color: var(--soft); font-size: .68rem; }
+.menu-button {
+  position: fixed; right: max(24px, calc((100vw - 585px) / 2 + 24px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); z-index: 15;
+  display: grid; place-items: center; width: 50px; height: 50px; padding: 12px;
+  border: 0; border-radius: 50%; color: var(--text); background: var(--red);
+  box-shadow: 0 4px 16px rgba(0,0,0,.25); cursor: pointer;
+}
+.menu-button svg { width: 24px; height: 24px; }
+.app-menu {
+  position: fixed; right: max(24px, calc((100vw - 585px) / 2 + 24px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 14;
+  display: grid; gap: 6px; min-width: 165px; padding: 8px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--card);
+  box-shadow: 0 8px 28px rgba(0,0,0,.4);
+}
+.app-menu button {
+  padding: 10px 12px; border: 0; border-radius: 10px; color: var(--text);
+  background: none; font: inherit; text-align: left; cursor: pointer;
+}
+.app-menu button:hover, .app-menu button:focus-visible { background: var(--line); }
 
 /* Bottom sheet: scheda dei giorni del calendario e degli eventi */
 body.sheet-open { overflow: hidden; }
@@ -333,6 +450,16 @@ body.sheet-open { overflow: hidden; }
 .sheet-handle { display: grid; place-items: center; padding: 12px 0 8px; touch-action: none; cursor: grab; }
 .sheet-handle span { width: 32px; height: 3px; border-radius: 2px; background: #B23A30; }
 .sheet-body { overflow-y: auto; padding: 6px 24px 28px; min-height: 180px; }
+.grade-sheet-heading { position: relative; display: flex; align-items: center; gap: 24px; min-height: 66px; margin: 4px 0 22px; }
+.grade-sheet-heading > .grade-value { flex: 0 0 66px; }
+.grade-sheet-details {
+  position: absolute; left: 50%; width: calc(100% - 132px); min-width: 0;
+  transform: translateX(-50%); text-align: center;
+}
+.grade-sheet-details .sheet-title { margin: 0; font-size: 1.2rem; }
+.grade-sheet-details .sheet-meta { margin: 5px 0 0; }
+.sheet-meta { margin: 4px 0 14px; color: var(--soft); font-size: .8rem; }
+.sheet-text { margin: 14px 0; color: var(--text); }
 .sheet-date { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 14px; font-size: 13px; color: var(--soft); }
 .sheet-date svg { width: 14px; height: 14px; }
 .sheet-empty { margin: 36px 0 12px; text-align: center; font-size: 14px; color: var(--soft); }
