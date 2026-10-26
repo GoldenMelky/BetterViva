@@ -1,48 +1,39 @@
-# Bug Fixes & Feature Requests
+# Checklist Bug Fixes e Miglioramenti
 
-## UI / Layout Fixes
+## Interfaccia Utente (UI) e Layout
 
-* **Title Bar:**
-  * Fix status update on the title bar (`updating status on title bar`).
-* **Homepage:**
-  * Fix the main homepage scroll container (`quella cazzo di scroll e che non ha mai funzionato sulla homepage`).
-* **Menu Button:**
-  * Standardize position across all screens.
-  * Fix missing menu button in settings.
-  * Correct menu button positioning in horizontal (landscape) mode.
-* **Back Button Navigation:**
-  * Ensure consistent back button position across views.
-  * Fix functionality for both physical back button and UI button.
-* **Colors & Borders:**
-  * Show a default border when "no color" is selected.
+- [ ] **Barra del Titolo:** Correggere l'aggiornamento dello stato sulla barra del titolo
+- [ ] **Homepage:** Risolvere il problema dello scroll nella homepage
+- [ ] **Pulsante Menu:**
+  - [ ] Correggere la posizione e aggiungerlo nelle impostazioni dove è assente
+  - [ ] Correggere la posizione in modalità orizzontale (landscape)
+- [ ] **Tasto Indietro:** Garantire una posizione fissa/coerente e verificare il funzionamento sia del tasto fisico sia di quello a schermo
+- [ ] **Colori:** Mostrare comunque un bordo visibile quando viene selezionato "nessun colore"
 
 ---
 
-## Calendar & Timetable Issues
+## Calendario e Vista Orario
 
-* **Timetable View (Orario):**
-  * **Lab Teacher Bug:** Fix test/exam placement showing in the wrong hour for lab teachers.
-  * **Text Truncation:** Fix multi-line events (3+ lines) where the 3rd line gets partially cut off / visible.
-* **Calendar Scroll & Navigation:**
-  * Keep the current week pinned at the top.
-  * Enable vertical month scrolling.
-  * Fix issue where navigating too far into past/future events prevents returning to the current view.
-  * Add a quick action button to **"Return to Today"**.
-  * Fix missing display for far past and far future events.
-
----
-
-## Popups & Event Details
-
-* **Event Popups:**
-  * Add the author's name to all event popups.
-  * **Action Button Bug:** Investigate and fix missing "Mark as done" ("Segna come fatto") button when an event has `manual: true`.
+- [ ] **Vista Orario:**
+  - [ ] Correggere la posizione della verifica che appare nell'ora sbagliata per i prof di laboratorio
+  - [ ] Corregger la visualizzazione degli eventi con più di 3 righe (la terza riga resta parzialmente visibile)
+- [ ] **Navigazione e Calendario:**
+  - [ ] Impostare il calendario con la settimana corrente in cima
+  - [ ] Abilitare lo scorrimento verticale dei mesi
+  - [ ] Risolvere il problema per cui, andando troppo avanti negli eventi, diventa impossibile tornare indietro
+  - [ ] Risolvere la mancata visualizzazione degli eventi molto passati o molto futuri
+  - [ ] Aggiungere il pulsante per tornare ad oggi
 
 ---
 
-## Grades & Subjects (Voti)
+## Pop-up e Dettaglio Eventi
 
-* **Period Selector:**
-  * If only one period exists, display only "Tutto l'anno" and hide individual period options.
-* **Subjects List:**
-  * Make the subjects list scrollable in the grades view.
+- [ ] Aggiungere il nome dell'autore in ogni pop-up di evento
+- [ ] Verificare e correggere la comparsa di "Segna come fatto" nel pop-up quando l'evento ha `manual: true`
+
+---
+
+## Voti e Materie
+
+- [ ] **Filtro Periodi:** Se è presente un solo periodo nei voti, mostrare solo "Tutto l'anno" senza far vedere i singoli periodi
+- [ ] **Lista Materie:** Rendere le materie scrollabili nella sezione voti
