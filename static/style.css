@@ -123,6 +123,7 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 }
 .panel .event-clickable { cursor: pointer; }
 .panel .event-clickable:focus-visible { outline: 2px solid var(--event-accent, var(--text)); outline-offset: 2px; }
+.panel .event.no-subject-color { outline: 1px solid var(--line); outline-offset: -1px; border-radius: 8px; }
 .panel .event[data-color] .badge,
 .evcard[data-color] .badge {
   border: 1px solid var(--event-accent); background: color-mix(in srgb, var(--event-accent) 28%, var(--event-bg));
