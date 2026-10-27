@@ -134,10 +134,18 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 
 /* Calendario: verifiche e interrogazioni */
 .cal { margin-top: 24px; }
-.cal h2 { margin: 0 0 14px; font-size: 20px; line-height: 21px; font-weight: 400; text-align: center; }
-.cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.cal h2 { margin: 0; font-size: 20px; line-height: 21px; font-weight: 400; }
+.cal-toolbar button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); background: var(--card); font: inherit; cursor: pointer; }
+.cal-scroll { max-height: min(65vh, 600px); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; }
+.cal-month h3 { position: sticky; top: 0; z-index: 2; margin: 0; padding: 8px 0; background: var(--bg); font-size: 1.05rem; font-weight: 600; text-transform: capitalize; }
+.cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-week { position: sticky; top: 37px; z-index: 2; background: var(--bg); }
 .cal-week span { padding-bottom: 6px; font-size: 17px; text-align: center; border-bottom: 1px solid var(--line); }
 
+.cal-days { display: block; margin-bottom: 16px; }
+.cal-days-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-month { scroll-margin-top: 0; }
 @media (orientation: landscape) and (min-width: 768px) {
   main:has(#view-home:not([hidden])) { max-width: 1200px; }
   #view-home {
