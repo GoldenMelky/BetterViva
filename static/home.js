@@ -20,7 +20,7 @@ const Home = (() => {
 
   let sel, panels, list, toggle;
   let items = [], sections = [], secDay = [], doneRefs = new Map(), eventsById = new Map();
-  let windowStart = null, eventData = [], timetableData = null, homeData = null, shifting = false;
+  let windowStart = null, eventData = [], timetableData = null, homeData = null, shifting = false, shiftQueued = false;
   let loading = false, pendingEvents = null, pendingTimetable = null, hasPendingTimetable = false;
   let mode = "orario", driver = null, timer = null;
   let touching = false, glideId = 0;     // dito appoggiato / animazione del selettore in corso
@@ -154,6 +154,9 @@ const Home = (() => {
   }
 
   const hasRow = (e) => e.text || isHomework(e);
+  const mergeEvents = (existing, incoming) => [
+    ...new Map([...existing, ...incoming].map((event) => [event.id, event])).values(),
+  ];
 
   /* ---- vista orario ---- */
   function fillPanel(panel, events, lessons, subjectConfig) {
@@ -389,19 +392,23 @@ const Home = (() => {
   }
 
   async function shiftWindow(direction) {
-    if (shifting || !items.length || !windowStart) return;
+    if (shifting) { shiftQueued = true; return; }
+    if (!items.length || !windowStart) return;
     shifting = true;
     const currentEnd = dateAt(WINDOW_DAYS - 1);
     const nextStart = shiftDate(windowStart, direction * WINDOW_SHIFT);
     const fetchStart = direction < 0 ? nextStart : shiftDate(currentEnd, 1);
-    const nextEnd = shiftDate(nextStart, WINDOW_DAYS - 1);
     try {
       const res = await api(`/api/events?start=${key(fetchStart)}&days=${WINDOW_SHIFT - 1}`);
       if (!res.ok) throw new Error(res.status);
       const chunk = await res.json();
-      if (driver || touching) return;    // l'utente ha ripreso a scorrere: render() ora farebbe saltare tutto; riproverà al prossimo stop
+      if (driver || touching) {
+        eventData = mergeEvents(eventData, chunk.events);
+        shiftQueued = true;
+        return;
+      }
       const selected = dateAt(clamp(Math.round(sel.scrollLeft / SLOT)));   // posizione di adesso, non di prima del fetch
-      eventData = [...eventData, ...chunk.events].filter((event) => event.date >= key(nextStart) && event.date <= key(nextEnd));
+      eventData = mergeEvents(eventData, chunk.events);
       windowStart = nextStart;
       render({ today: chunk.today, events: eventData }, timetableData, selected);
       document.getElementById("status").textContent = "";
@@ -410,6 +417,14 @@ const Home = (() => {
       else document.getElementById("status").textContent = "Impossibile caricare altri eventi. Riprova.";
     } finally {
       shifting = false;
+      if (shiftQueued) {
+        shiftQueued = false;
+        if (!driver && !touching && items.length) {
+          const idx = clamp(Math.round(sel.scrollLeft / SLOT));
+          if (idx <= WINDOW_EDGE) void shiftWindow(-1);
+          else if (idx >= WINDOW_DAYS - WINDOW_EDGE - 1) void shiftWindow(1);
+        }
+      }
     }
   }
 
@@ -429,7 +444,7 @@ const Home = (() => {
       timetableData = hasPendingTimetable ? pendingTimetable : ttRes.ok ? await ttRes.json() : null;
       const data = pendingEvents || await res.json();
       loading = false;
-      render(data, timetableData, selected);
+      render({ ...data, events: mergeEvents(eventData, data.events) }, timetableData, selected);
       Calendar.load();   // non blocca la home: se fallisce il calendario resta nascosto
       status.textContent = "";
     } catch (e) {
@@ -443,7 +458,7 @@ const Home = (() => {
     if (detail.path === `/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`) {
       if (loading) { pendingEvents = detail.data; return; }
       const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
-      render(detail.data, timetableData, selected);
+      render({ ...detail.data, events: mergeEvents(eventData, detail.data.events) }, timetableData, selected);
       document.getElementById("status").textContent = "";
     } else if (detail.path === "/api/timetable") {
       if (loading) { pendingTimetable = detail.data; hasPendingTimetable = true; return; }
