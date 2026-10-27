@@ -84,6 +84,7 @@ const Home = (() => {
   function colorSubject(node, subjectId, subjectConfig) {
     const color = subjectConfig?.[String(subjectId)]?.color;
     if (SUBJECT_COLORS.has(color)) node.dataset.color = color;
+    else node.classList.add("no-subject-color");
   }
 
   /* ---- riga di un evento: testo (apre la scheda) + checkbox se è un compito ---- */

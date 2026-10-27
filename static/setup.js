@@ -272,7 +272,9 @@ const Setup = (() => {
       trigger.setAttribute("aria-expanded", "false");
       const currentSwatch = el("span", "color-swatch");
       const currentName = el("span", "color-current-name", colorName(config[s.id].color));
-      currentSwatch.style.setProperty("--swatch", COLORS.find(([key]) => key === config[s.id].color)?.[2] || "var(--muted)");
+      const currentColor = COLORS.find(([key]) => key === config[s.id].color)?.[2];
+      currentSwatch.classList.toggle("no-color", !currentColor);
+      currentSwatch.style.setProperty("--swatch", currentColor || "transparent");
       trigger.append(currentSwatch, currentName, icon("down"));
 
       const menu = el("div", "subject-color-options");
@@ -284,7 +286,8 @@ const Setup = (() => {
           config[s.id].color = value;
           dirty = true;
           currentName.textContent = label;
-          currentSwatch.style.setProperty("--swatch", sample || "var(--muted)");
+          currentSwatch.classList.toggle("no-color", !sample);
+          currentSwatch.style.setProperty("--swatch", sample || "transparent");
           menu.querySelectorAll('[role="option"]').forEach((item) => {
             item.setAttribute("aria-selected", String(item === option));
           });
@@ -293,6 +296,7 @@ const Setup = (() => {
         option.setAttribute("role", "option");
         option.setAttribute("aria-selected", String((config[s.id].color || "") === value));
         option.append(el("span", "color-swatch"), el("span", null, label));
+        option.firstChild.classList.toggle("no-color", !sample);
         option.firstChild.style.setProperty("--swatch", sample || "var(--muted)");
         option.addEventListener("keydown", (event) => {
           const options = [...menu.querySelectorAll('[role="option"]')];

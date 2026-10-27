@@ -118,6 +118,7 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 .event-hour { flex: 0 0 auto; color: var(--event-text, var(--text)); }
 .panel .ev-row-compact .ev {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+.panel .event.no-subject-color { outline: 1px solid var(--line); outline-offset: -1px; border-radius: 8px; }
   overflow: hidden;
 }
 .panel .event-clickable { cursor: pointer; }
@@ -228,6 +229,7 @@ button:disabled { opacity: .6; cursor: default; }
 .evtitle h3 { display: flex; align-items: baseline; gap: 7px; margin: 0; font-size: 15pt; line-height: 18px; font-weight: 900; }
 .ev-hour { color: var(--muted); font-size: .7rem; font-weight: 400; white-space: nowrap; }
 .evcard[data-color] .ev-hour { color: var(--event-accent); }
+.evcard.no-subject-color { border-left-color: var(--line); }
 .evnone { margin: 0; padding: 48px 15px; text-align: center; font-size: 13px; color: var(--soft); }
 
 /* Riga evento con checkbox (stessa in entrambe le viste) */
@@ -264,6 +266,7 @@ button:disabled { opacity: .6; cursor: default; }
 .subject-color-options { position: absolute; top: calc(100% + 5px); right: 0; z-index: 10; width: 142px; max-height: 220px; overflow-y: auto; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
 .subject-color-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px; border: 0; border-radius: 7px; color: var(--text); background: none; font: inherit; font-size: .8rem; text-align: left; cursor: pointer; }
 .subject-color-option[aria-selected="true"], .subject-color-option:hover { background: var(--line); }
+.color-swatch.no-color { border: 1px solid var(--soft); background: transparent; box-shadow: none; }
 .subject-color-option:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
 .labbox { position: relative; width: 28px; height: 28px; }
 .labbox input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
