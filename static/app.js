@@ -58,14 +58,70 @@ class LoginError extends Error {
   constructor(message, invalid = false) { super(message); this.invalid = invalid; }
 }
 
+let syncRequests = 0;
+let syncFailed = false;
+let lastSyncAt = null;
+let connectionToastTimer = null;
+
+function showConnectionToast(message) {
+  const toast = $("connection-toast");
+  toast.textContent = message;
+  toast.hidden = false;
+  clearTimeout(connectionToastTimer);
+  connectionToastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 5000);
+}
+
+function renderSyncStatus() {
+  const status = $("sync-status");
+  if (!navigator.onLine || syncFailed) {
+    status.textContent = "Impossibile connettersi al server.";
+  } else if (syncRequests) {
+    status.textContent = "Aggiornamento…";
+  } else if (lastSyncAt) {
+    status.textContent = `Aggiornato alle ${new Intl.DateTimeFormat("it-IT", {
+      hour: "2-digit", minute: "2-digit",
+    }).format(lastSyncAt)}`;
+  } else {
+    status.textContent = "Aggiornamento…";
+  }
+}
+
+async function requestWithStatus(request) {
+  if (syncRequests === 0) syncFailed = false;
+  syncRequests++;
+  renderSyncStatus();
+  try {
+    const response = await request();
+    if (response.ok || response.status < 500) lastSyncAt = new Date();
+    else {
+      syncFailed = true;
+      showConnectionToast(navigator.onLine
+        ? "Impossibile connettersi al server."
+        : "Sei offline. Controlla la connessione.");
+    }
+    return response;
+  } catch (error) {
+    syncFailed = true;
+    showConnectionToast(navigator.onLine
+      ? "Impossibile connettersi al server."
+      : "Sei offline. Controlla la connessione.");
+    throw error;
+  } finally {
+    syncRequests--;
+    renderSyncStatus();
+  }
+}
+
 async function postLogin(username, password) {
   let res;
   try {
-    res = await fetch("/api/login", {
+    res = await requestWithStatus(() => fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
-    });
+    }));
   } catch {
     throw new LoginError("Connessione non riuscita. Controlla la rete e riprova.");
   }
@@ -131,12 +187,14 @@ function cachedResponse(data) {
 
 // API requests renew an expired session once. GET responses are cached per account.
 async function fetchApi(path, options) {
-  let res = await fetch(path, options);
-  if (res.status === 401) {
-    await silentLogin();
-    res = await fetch(path, options);
-  }
-  return res;
+  return requestWithStatus(async () => {
+    let res = await fetch(path, options);
+    if (res.status === 401) {
+      await silentLogin();
+      res = await fetch(path, options);
+    }
+    return res;
+  });
 }
 
 function emitCacheEvent(name, detail) {
@@ -209,6 +267,16 @@ async function api(path, options = {}) {
 /* ---------- Interfaccia ---------- */
 const $ = (id) => document.getElementById(id);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+let currentView = null;
+let appHistoryInitialized = false;
+
+window.addEventListener("offline", () => {
+  syncFailed = true;
+  renderSyncStatus();
+  showConnectionToast("Sei offline. Controlla la connessione.");
+});
+
+window.addEventListener("online", renderSyncStatus);
 
 function show(view) {
   $("view-login").hidden = view !== "login";
@@ -296,7 +364,7 @@ window.addEventListener("bv-api-cache-error", ({ detail }) => {
 });
 
 async function logout() {
-  await fetch("/api/logout", { method: "POST" }).catch(() => {});
+  await requestWithStatus(() => fetch("/api/logout", { method: "POST" })).catch(() => {});
   await dbClear();
   $("password").value = "";
   showLogin();
@@ -354,8 +422,13 @@ if (!window.crypto?.subtle) {
 
 /* ---------- Avvio ---------- */
 (async function init() {
+  if (!navigator.onLine) {
+    syncFailed = true;
+    renderSyncStatus();
+    showConnectionToast("Sei offline. Controlla la connessione.");
+  }
   try {
-    const res = await fetch("/api/me");
+    const res = await requestWithStatus(() => fetch("/api/me"));
     if (res.ok) return enter(res);
   } catch {
     if (await restoreOfflineHome()) return;
