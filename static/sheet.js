@@ -130,6 +130,7 @@ const EventSheet = (() => {
       trash.addEventListener("click", () => { confirming = e.id; error = ""; draw(); });
       top.append(h("span", "t-title", e.subject || "Evento"), badge(e.kind), trash);
       item.append(top);
+      if (e.teacher) item.append(h("p", "sheet-meta", e.teacher));
       if (e.text) item.append(h("p", "t-text", e.text));
       return item;
     }
@@ -154,6 +155,7 @@ const EventSheet = (() => {
       const title = h("h2", "sheet-title"); title.append(h("span", "", e.subject || "Evento"));
       if (e.kind) title.append(badge(e.kind));
       const nodes = [title];
+      if (e.teacher) nodes.push(h("p", "sheet-meta", e.teacher));
       if (e.text) nodes.push(h("p", "sheet-text", e.text));
 
       const actions = h("div", "sheet-actions");
