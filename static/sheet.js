@@ -166,7 +166,7 @@ const EventSheet = (() => {
         busy = false; redraw();
       };
 
-      if (!marking && Home.isHomework(e) && !e.kind) {
+      if (!marking && Home.isHomework(e) && !e.kind && !e.manual) {
         const doneBtn = button(e.done ? "Segna da fare" : "Segna come completato", e.done ? "ghost" : "", async () => {
           doneBtn.disabled = true; error = "";
           const state = await Home.toggleDone(e);
