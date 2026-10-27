@@ -261,8 +261,16 @@ const Grades = (() => {
 
   function open() {
     show("grades");
+    subjectId = null;
     root().replaceChildren();
     load();
+  }
+
+  function handleBack() {
+    if (subjectId == null) return false;
+    subjectId = null;
+    render();
+    return true;
   }
 
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
