@@ -249,7 +249,7 @@ button:disabled { opacity: .6; cursor: default; }
 .welcome-sub { margin: 6px 0 28px; text-align: center; font-size: 1.15rem; color: var(--soft); }
 #view-setup { padding-bottom: 90px; }
 #view-setup h1 { margin: 28px 0 8px; font-size: 1.7rem; }
-.lead { margin: 0 auto 18px; max-width: 260px; text-align: center; font-size: 12px; line-height: 15px; color: var(--text); }
+.lead { margin: 0 auto 18px; max-width: 260px; text-align: center; font-size: 12px; line-height: 15px; color: var(--soft); }
 .lead b { font-weight: 700; }
 .cols { display: grid; grid-template-columns: 34px 1fr 34px; gap: 10px; padding: 0 4px 0px; font-size: 01rem; color: var(--soft); }
 .cols span:nth-child(2) { text-align: center; }
