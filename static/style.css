@@ -145,6 +145,7 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 
 .cal-days { display: block; margin-bottom: 16px; }
 .cal-days-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-days-row[data-current-week="true"] { background: rgba(160, 29, 17, .12); }
 .cal-month { scroll-margin-top: 0; }
 @media (orientation: landscape) and (min-width: 768px) {
   main:has(#view-home:not([hidden])) { max-width: 1200px; }

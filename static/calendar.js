@@ -85,9 +85,15 @@ const Calendar = (() => {
     end.setDate(last.getDate() + (6 - (last.getDay() + 6) % 7));
     const byDay = {};
     data.events.forEach((event) => (byDay[event.date] ||= []).push(event));
+    const currentWeek = key(today);
+
     for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 7)) {
       const week = document.createElement("div");
       week.className = "cal-days-row";
+      const weekStart = new Date(date);
+      const weekEnd = new Date(date);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      if (currentWeek >= key(weekStart) && currentWeek <= key(weekEnd)) week.dataset.currentWeek = "true";
       for (let day = 0; day < 7; day++) {
         const d = new Date(date);
         d.setDate(d.getDate() + day);
@@ -125,6 +131,17 @@ const Calendar = (() => {
     $("cal").hidden = !months.childElementCount;
   }
 
+  function scrollToCurrentWeek() {
+    const scroll = $("cal-scroll");
+    const currentMonth = $("cal-months").querySelector(`[data-month="${monthKey(monthDate(0))}"]`);
+    const row = currentMonth?.querySelector('[data-current-week="true"]');
+    if (!row) return;
+    const titleHeight = currentMonth.querySelector("h3").offsetHeight;
+    const weekdaysHeight = currentMonth.querySelector(".cal-week").offsetHeight;
+    const rowTop = row.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
+    scroll.scrollTop = Math.max(0, rowTop - titleHeight - weekdaysHeight);
+  }
+
   async function loadOffsets(offsets, prepend = false) {
     const unique = offsets.filter((offset) => !monthOffsets.includes(offset));
     if (!unique.length) return;
@@ -158,6 +175,7 @@ const Calendar = (() => {
       monthOffsets = [];
       await loadOffsets([-MONTH_BATCH, -1, 0, 1, MONTH_BATCH]);
       if (!monthOffsets.length) initialized = false;
+      scrollToCurrentWeek();
       return;
     }
     try {
