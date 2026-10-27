@@ -384,6 +384,7 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 .grade-summary-text p { margin: 7px 0 0; color: var(--soft); font-size: .8rem; }
 .grade-subject-list, .grade-list { display: flex; flex-direction: column; gap: 12px; }
 .grade-subject-row {
+.grade-subject-list { max-height: 55vh; overflow-y: auto; overscroll-behavior-y: contain; }
   display: flex; align-items: center; gap: 16px; width: 100%; min-height: 45px;
   padding: 8px 10px; border: 0; border-radius: 17px; color: var(--text); background: #4d1010;
   text-align: left; cursor: pointer;
