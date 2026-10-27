@@ -192,6 +192,8 @@ const Calendar = (() => {
     if (scroll.scrollTop + scroll.clientHeight > scroll.scrollHeight - 80) void loadMore(1);
   }, { passive: true });
 
+  $("cal-today").addEventListener("click", scrollToCurrentWeek);
+
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
     if (!detail.path.startsWith("/api/calendar")) return;
     const url = new URL(detail.path, location.origin);
