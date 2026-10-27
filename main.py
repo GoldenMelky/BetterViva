@@ -344,7 +344,7 @@ def set_event_kind(event_id: str, body: KindIn, request: Request):
         raise HTTPException(422, "Id evento non valido")
     db.set_event_override(s["studentId"], event_id, body.kind or "none")
     s.pop("events", None)      # le cache contengono il vecchio `kind`
-    s.pop("calendar", None)
+    s.pop("calendars", None)
     return {"ok": True}
 
 
@@ -367,21 +367,22 @@ def set_event_done(event_id: str, body: DoneIn, request: Request):
 
 
 @app.get("/api/calendar")
-def calendar(request: Request):
-    """Restituisce le prove del mese corrente in una griglia di settimane complete.
+def calendar(request: Request, month: date | None = None):
+    """Restituisce le prove del mese richiesto, oppure del mese corrente.
 
-    L'intervallo parte dal lunedì della settimana che contiene il primo giorno
-    del mese e termina la domenica della settimana che contiene l'ultimo giorno;
-    include quindi anche i giorni passati del mese. La risposta è memorizzata per
-    dieci minuti al giorno e contiene solo eventi classificati come prove.
+    L'intervallo copre settimane complete dal lunedì della prima settimana del
+    mese alla domenica dell'ultima. Le risposte sono memorizzate per mese per
+    dieci minuti e contengono solo eventi classificati come prove.
     Solleva HTTP 502 se ClasseViva non fornisce i dati necessari.
     """
     s = current_session(request)
     today = date.today()
-    cached = s.get("calendar")
-    if cached and cached["day"] == today.isoformat() and time.time() - cached["at"] < 600:
+    first = (month or today).replace(day=1)
+    month_key = first.isoformat()
+    calendars = s.setdefault("calendars", {})
+    cached = calendars.get(month_key)
+    if cached and time.time() - cached["at"] < 600:
         return cached["data"]
-    first = today.replace(day=1)
     last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
     start = first - timedelta(days=first.weekday())
     end = last + timedelta(days=6 - last.weekday())
@@ -394,7 +395,7 @@ def calendar(request: Request):
         raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
     data = {"today": today.isoformat(), "start": start.isoformat(), "end": end.isoformat(),
             "events": [e for e in events if e["kind"]]}
-    s["calendar"] = {"at": time.time(), "day": today.isoformat(), "data": data}
+    calendars[month_key] = {"at": time.time(), "data": data}
     return data
 
 
@@ -564,7 +565,7 @@ def save_setup(body: SetupIn, request: Request):
             state["timetables"][year] = True
     s.pop("setup", None)
     s.pop("events", None)   # gli eventi dipendono dall'orario
-    s.pop("calendar", None)
+    s.pop("calendars", None)
     return {"school_year": year, "cells": len(cells)}
 
 
@@ -586,7 +587,7 @@ def save_subjects(body: SubjectsIn, request: Request):
         options = db.update_options(s["studentId"], {"subject_config": config, "color_settings_configured": True})
         update_me_state(s["studentId"], options=options)
     s.pop("events", None)
-    s.pop("calendar", None)
+    s.pop("calendars", None)
     return {"subjects": len(config)}
 
 
