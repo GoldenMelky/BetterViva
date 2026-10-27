@@ -286,14 +286,31 @@ function show(view) {
   $("view-grades").hidden = view !== "grades";
   $("avatar").hidden = view !== "home" && view !== "grades" && view !== "setup" && view !== "settings";
   $("settings-button").hidden = view !== "home";
+  $("back-button").hidden = view !== "grades" && view !== "settings" && view !== "setup";
   $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "settings";
   $("app-menu").hidden = true;
   $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
+  currentView = view;
+  if (!appHistoryInitialized) {
+    history.replaceState({ bvApp: true, view }, "");
+    appHistoryInitialized = true;
+  }
+}
+
+function navigateTo(view) {
+  if (currentView !== view) history.pushState({ bvApp: true, view }, "");
+  show(view);
+}
+
+function replaceView(view) {
+  history.replaceState({ bvApp: true, view }, "");
+  appHistoryInitialized = true;
+  show(view);
 }
 
 function showHome(promptColors = false) {
-  show("home");
+  replaceView("home");
   Home.load();
   if (promptColors === true) Settings.promptColorSetup(() => showHome());
 }
@@ -320,7 +337,7 @@ async function enter(profileResponse = null) {
     }
   }
   if (me && me.setup_needed) {
-    show("setup");
+    replaceView("setup");
     Setup.start(me.first_name || titleCase((me.name || "").split(" ")[0]), showHome);
   } else {
     showHome(!!me?.color_setup_pending);
@@ -354,8 +371,42 @@ function showLogin(message = "") {
   const err = $("login-error");
   err.textContent = message;
   err.hidden = !message;
-  show("login");
+  replaceView("login");
 }
+
+function appBack() {
+  if (Sheet.handleBack()) return;
+  if (currentView === "setup" && Setup.back()) return;
+  if (currentView === "settings") return showHome();
+  if (currentView === "home") return history.back();
+  if (history.state?.bvApp) history.back();
+  else showHome();
+}
+
+function restoreView(view) {
+  if (view === "home") showHome();
+  else if (view === "grades") Grades.open();
+  else if (view === "settings") Settings.open(appBack);
+  else if (view === "setup") show("setup");
+  else showLogin();
+}
+
+window.addEventListener("popstate", (event) => {
+  if (Sheet.handleBack()) return;
+  if (currentView === "setup" && Setup.back()) {
+    history.pushState({ bvApp: true, view: "setup" }, "");
+    return;
+  }
+  if (currentView === "grades" && Grades.handleBack()) return;
+  const view = event.state?.bvApp ? event.state.view : null;
+  if (currentView === "settings" && view === "grades") return showHome();
+  if (view) return restoreView(view);
+  if (currentView === "setup") {
+    history.pushState({ bvApp: true, view: "setup" }, "");
+    return;
+  }
+  if (currentView !== "home") showHome();
+});
 
 window.addEventListener("bv-api-cache-error", ({ detail }) => {
   if (detail.path === "/api/timetable" || detail.path === "/api/setup/timetable") {
@@ -402,15 +453,25 @@ $("avatar").addEventListener("click", () => {
   if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) logout();
 });
 
-$("settings-button").addEventListener("click", () => Settings.open(showHome));
+$("back-button").addEventListener("click", appBack);
+$("settings-button").addEventListener("click", () => {
+  navigateTo("settings");
+  Settings.open(appBack);
+});
 $("menu-button").addEventListener("click", () => {
   const menu = $("app-menu");
   menu.hidden = !menu.hidden;
   $("menu-button").setAttribute("aria-expanded", String(!menu.hidden));
 });
 $("menu-home").addEventListener("click", () => showHome());
-$("menu-grades").addEventListener("click", () => Grades.open());
-$("menu-settings").addEventListener("click", () => Settings.open(showHome));
+$("menu-grades").addEventListener("click", () => {
+  navigateTo("grades");
+  Grades.open();
+});
+$("menu-settings").addEventListener("click", () => {
+  navigateTo("settings");
+  Settings.open(appBack);
+});
 
 // WebCrypto esiste solo su HTTPS o localhost: altrimenti niente salvataggio delle credenziali
 if (!window.crypto?.subtle) {

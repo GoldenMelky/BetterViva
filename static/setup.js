@@ -500,5 +500,18 @@ const Setup = (() => {
     if (step >= 0) render();
   });
 
-  return { start, editSubjects, editTimetable };
+  function back() {
+    if (mode === "initial") {
+      if (step > 0) { step--; render(); }
+      return true;
+    }
+    if (mode === "timetable" && step > 2) {
+      step--;
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  return { start, editSubjects, editTimetable, back };
 })();

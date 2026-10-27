@@ -17,19 +17,25 @@ const Settings = (() => {
 
   function open(onBack) {
     const root = $("settings-body");
+    const returnToSettings = () => {
+      if (history.state?.bvApp && history.state.view === "setup") history.back();
+      else open(onBack);
+    };
     const title = el("h1", null, "Impostazioni");
     const lead = el("p", "lead", "Personalizza BetterViva.");
     const subjects = el("button", "primary settings-edit", "Configura le materie");
     subjects.type = "button";
     subjects.addEventListener("click", () => {
+      navigateTo("setup");
       show("setup");
-      Setup.editSubjects(() => open(onBack));
+      Setup.editSubjects(returnToSettings);
     });
     const timetable = el("button", "primary settings-edit", "Configura l’orario");
     timetable.type = "button";
     timetable.addEventListener("click", () => {
+      navigateTo("setup");
       show("setup");
-      Setup.editTimetable(() => open(onBack));
+      Setup.editTimetable(returnToSettings);
     });
     const averageLabel = el("label", "settings-average-label", "Media generale");
     averageLabel.htmlFor = "grade-average-mode";
@@ -94,7 +100,7 @@ const Settings = (() => {
     const footer = el("div", "settings-footer");
     footer.append(back);
     root.replaceChildren(title, lead, subjects, timetable, averageLabel, averageMode, averageHint, footer);
-    show("settings");
+    replaceView("settings");
   }
 
   function promptColorSetup(onComplete) {
@@ -116,6 +122,7 @@ const Settings = (() => {
     const later = actionButton("Più tardi", dismiss, "secondary");
     const configure = actionButton("Configura ora", () => {
       backdrop.remove();
+      navigateTo("setup");
       show("setup");
       Setup.editSubjects(onComplete);
     });

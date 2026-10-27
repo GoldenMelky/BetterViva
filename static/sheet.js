@@ -4,7 +4,7 @@
    - showDay: i giorni del calendario, con la lista delle prove e "Non è una verifica?";
    - showEvent: un evento della home, per leggerlo per intero e segnarlo come prova (o toglierlo). */
 const Sheet = (() => {
-  let backdrop, sheet, body, hideTimer = null;
+  let backdrop, sheet, body, hideTimer = null, historyEntry = false;
 
   function build() {
     if (backdrop) return;
@@ -39,6 +39,10 @@ const Sheet = (() => {
   function open(...nodes) {
     build();
     clearTimeout(hideTimer);
+    if (backdrop.hidden) {
+      history.pushState({ ...(history.state || {}), bvSheet: true }, "");
+      historyEntry = true;
+    }
     body.replaceChildren(...nodes);
     backdrop.hidden = false;
     document.body.classList.add("sheet-open");
@@ -47,14 +51,26 @@ const Sheet = (() => {
 
   function update(...nodes) { body.replaceChildren(...nodes); }
 
-  function close() {
+  function close(fromHistory = false) {
     if (!backdrop || backdrop.hidden) return;
+    if (!fromHistory && historyEntry) {
+      historyEntry = false;
+      history.back();
+      return;
+    }
+    historyEntry = false;
     backdrop.classList.remove("open");
     document.body.classList.remove("sheet-open");
     hideTimer = setTimeout(() => { backdrop.hidden = true; }, 220);
   }
 
-  return { open, update, close };
+  function handleBack() {
+    if (!backdrop || backdrop.hidden) return false;
+    close(true);
+    return true;
+  }
+
+  return { open, update, close, handleBack };
 })();
 
 const EventSheet = (() => {

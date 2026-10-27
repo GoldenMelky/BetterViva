@@ -146,6 +146,7 @@ const Grades = (() => {
     const list = el("div", "grade-subject-list");
     for (const subject of stats?.subjects || []) {
       const row = button("", "grade-subject-row", () => {
+        history.pushState({ ...(history.state || {}), betterviva: true, view: "grades", gradeSubject: true }, "");
         subjectId = subject.subjectId;
         render();
       });
@@ -162,8 +163,8 @@ const Grades = (() => {
     const nav = el("div", "grade-period-nav");
     if (showBack) {
       const back = button("‹", "grade-period-back", () => {
-        subjectId = null;
-        render();
+        if (history.state?.gradeSubject) history.back();
+        else handleBack();
       });
       back.setAttribute("aria-label", "Torna a tutte le materie");
       nav.append(back);
@@ -274,5 +275,5 @@ const Grades = (() => {
     if (tabs) requestAnimationFrame(() => centerPeriodTab(tabs, "auto"));
   });
 
-  return { open };
+  return { open, handleBack };
 })();
