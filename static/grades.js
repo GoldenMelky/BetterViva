@@ -65,7 +65,8 @@ const Grades = (() => {
 
   function renderTabs() {
     const tabs = el("div", "grade-period-tabs");
-    const items = [{ periodPos: null, periodLabel: "Tutto l’anno" }, ...periods()];
+    const items = [{ periodPos: null, periodLabel: "Tutto l’anno" },
+      ...(periods().length > 1 ? periods() : [])];
     const before = el("span", "grade-period-spacer");
     const after = el("span", "grade-period-spacer");
     before.setAttribute("aria-hidden", "true");
@@ -241,7 +242,7 @@ const Grades = (() => {
         throw new Error(body.detail || "Impossibile caricare i voti.");
       }
       data = await response.json();
-      if (periodPos != null && !periods().some((period) => period.periodPos === periodPos)) {
+      if (periods().length <= 1 || (periodPos != null && !periods().some((period) => period.periodPos === periodPos))) {
         periodPos = null;
         subjectId = null;
       }
