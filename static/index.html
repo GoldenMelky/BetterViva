@@ -89,13 +89,11 @@
 
       <!-- Calendario del mese con verifiche e interrogazioni -->
       <section id="cal" class="cal" aria-labelledby="cal-title" hidden>
-        <div class="cal-toolbar">
-          <h2 id="cal-title">Verifiche e interrogazioni</h2>
-          <button id="cal-today" type="button">Oggi</button>
+        <h2 id="cal-title">Verifiche e interrogazioni</h2>
+        <div class="cal-week" aria-hidden="true">
+          <span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span>
         </div>
-        <div id="cal-scroll" class="cal-scroll" tabindex="0" aria-label="Calendario mensile">
-          <div id="cal-months" class="cal-months"></div>
-        </div>
+        <div id="cal-grid" class="cal-grid"></div>
       </section>
     </section>
 

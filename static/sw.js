@@ -4,7 +4,7 @@
    - Il guscio dell'app viene servito subito dalla cache; la rete aggiorna la copia
      per l'apertura successiva.
    - /api/* non passa mai di qui: i dati personali sono gestiti in IndexedDB per account. */
-const CACHE = "betterviva-v1";   // cambialo solo se vuoi forzare la pulizia della cache
+const CACHE = "betterviva-v2";
 const SHELL = [
   "/",
   "/static/style.css", "/static/home.js", "/static/grades.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js",
