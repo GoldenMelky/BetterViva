@@ -8,11 +8,14 @@ Evento: {id, date, subject, subject_id, teacher, text, kind, code, source}
 """
 import hashlib
 import json
+import logging
 import re
 from datetime import date, timedelta
 from pathlib import Path
 
 from verifiche import classify
+
+log = logging.getLogger(__name__)
 
 # Facoltativo: subjects.json = {"MATEMATICA E COMPLEMENTI": "Matematica", ...}
 SUBJECTS_FILE = Path(__file__).parent / "subjects.json"
@@ -120,7 +123,12 @@ def build_events(user, days: int, subject_list: list[dict] | None = None,
     first = since or date.today()
     last = until or first + timedelta(days=days)
     api_date_format = "%Y%m%d"
-    agenda = user.agenda(first.strftime(api_date_format), last.strftime(api_date_format))["agenda"]
+    agenda_response = user.agenda(first.strftime(api_date_format), last.strftime(api_date_format))
+    if not isinstance(agenda_response, dict):
+        raise TypeError("ClasseViva agenda response must be an object")
+    if "agenda" not in agenda_response:
+        log.warning("ClasseViva agenda response omitted 'agenda'; treating it as empty")
+    agenda = agenda_response.get("agenda", [])
     # date_field=None: nessun filtro del wrapper, filtriamo qui con la data giusta
     homeworks = user.homeworks(
         first.strftime(api_date_format), last.strftime(api_date_format), date_field=None
