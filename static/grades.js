@@ -22,7 +22,7 @@ const Grades = (() => {
   };
   const colorForAverage = (value) => {
     if (value == null || !Number.isFinite(Number(value))) return "blue";
-    if (Number(value) > 6) return "green";
+    if (Number(value) >= 6) return "green";
     if (Number(value) >= 5) return "orange";
     return "red";
   };
