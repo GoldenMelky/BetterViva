@@ -53,6 +53,11 @@ body {
 .header-button { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; margin-left: 0; padding: 7px; color: #FFE9E9; background: none; border: 0; cursor: pointer; }
 .header-button svg { width: 24px; height: 24px; }
 .header-button + .avatar { margin-left: 8px; }
+#back-button {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 110px);
+  left: max(22px, calc((100vw - 585px) / 2 + 22px)); z-index: 15;
+  border-radius: 50%; background: var(--red); box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+}
 
 main { max-width: 585px; margin: 0px auto; padding: 15px 22px 40px; }
 h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: center; }
@@ -118,8 +123,7 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 .event-hour { flex: 0 0 auto; color: var(--event-text, var(--text)); }
 .panel .ev-row-compact .ev {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-.panel .event.no-subject-color { outline: 1px solid var(--line); outline-offset: -1px; border-radius: 8px; }
-  overflow: hidden;
+  overflow: hidden; padding-block: 0;
 }
 .panel .event-clickable { cursor: pointer; }
 .panel .event-clickable:focus-visible { outline: 2px solid var(--event-accent, var(--text)); outline-offset: 2px; }
@@ -427,14 +431,17 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 .grade-row-note { overflow: hidden; font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
 .grade-row-meta { color: var(--soft); font-size: .68rem; }
 .menu-button {
-  display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; margin-left: 0; padding: 7px;
-  border: 0; border-radius: 50%; color: #FFE9E9; background: none; cursor: pointer;
+  position: fixed; right: max(22px, calc((100vw - 585px) / 2 + 22px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); z-index: 15;
+  display: grid; place-items: center; width: 52px; height: 52px; padding: 10px;
+  border: 0; border-radius: 50%; color: #FFE9E9; background: var(--red); cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .4);
 }
-.menu-button svg { width: 24px; height: 24px; }
+.menu-button svg { width: 26px; height: 26px; }
 .menu-button:focus-visible, #back-button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .app-menu {
-  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 76px);
-  right: max(24px, calc((100vw - 585px) / 2 + 24px)); z-index: 14;
+  position: fixed; right: max(22px, calc((100vw - 585px) / 2 + 22px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 82px); z-index: 14;
   display: grid; gap: 6px; min-width: 165px; padding: 8px;
   border: 1px solid var(--line); border-radius: 16px; background: var(--card);
   box-shadow: 0 8px 28px rgba(0,0,0,.4);

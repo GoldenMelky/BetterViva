@@ -82,9 +82,12 @@ const Home = (() => {
   function line(tag, cls, text) { const el = document.createElement(tag); el.className = cls; el.textContent = text; return el; }
 
   function colorSubject(node, subjectId, subjectConfig) {
-    const color = subjectConfig?.[String(subjectId)]?.color;
-    if (SUBJECT_COLORS.has(color)) node.dataset.color = color;
-    else node.classList.add("no-subject-color");
+    if (subjectId == null) {
+      node.classList.add("no-subject-color");
+      return;
+    }
+    const configuredColor = subjectConfig?.[String(subjectId)]?.color;
+    node.dataset.color = SUBJECT_COLORS.has(configuredColor) ? configuredColor : "red";
   }
 
   /* ---- riga di un evento: testo (apre la scheda) + checkbox se è un compito ---- */
@@ -133,7 +136,7 @@ const Home = (() => {
     }
   }
 
-  const isHomework = (e) => Array.isArray(e.source) && e.source.includes("homework");
+  const isHomework = (e) => !e.kind;
 
   function eventRow(e, compact = false) {
     const row = document.createElement("div"); row.className = "ev-row";

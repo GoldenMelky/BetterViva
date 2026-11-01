@@ -286,8 +286,8 @@ function show(view) {
   $("view-grades").hidden = view !== "grades";
   $("avatar").hidden = view !== "home" && view !== "grades" && view !== "setup" && view !== "settings";
   $("settings-button").hidden = view !== "home";
-  $("back-button").hidden = view !== "grades" && view !== "settings" && view !== "setup";
-  $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "settings";
+  $("back-button").hidden = view === "home" || view === "login";
+  $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "settings" && view !== "setup";
   $("app-menu").hidden = true;
   $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
