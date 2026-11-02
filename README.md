@@ -36,7 +36,7 @@ Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di 
   - [ ] Interfaccia per tablet e desktop
 - [ ] Bacheca
 - [x] Voti
-  - [ ] Calcolatore di voti
+  - [x] Calcolatore di voti
 - [ ] Assenze
 - [ ] Note
 - [ ] Altre funzioni di ClasseViva

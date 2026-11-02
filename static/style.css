@@ -364,11 +364,6 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 }
 .grade-period-tabs::-webkit-scrollbar { display: none; }
 .grade-period-spacer { flex: 0 0 0; }
-.grade-period-back {
-  flex: 0 0 36px; width: 36px; height: 36px; margin-left: 14px; padding: 0;
-  border: 0; border-radius: 50%; color: var(--text); background: var(--card);
-  font: 400 2rem/1 "Figtree", sans-serif; cursor: pointer;
-}
 .grade-period-tab {
   flex: 0 0 auto; padding: 5px 0; border: 0; color: var(--muted); background: none;
   font: inherit; font-size: .82rem; white-space: nowrap; cursor: pointer;
@@ -391,6 +386,40 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 .grade-summary-text { min-width: 0; }
 .grade-summary-text h1 { margin: 0; font-size: 1.45rem; line-height: 1.15; text-align: left; overflow-wrap: anywhere; }
 .grade-summary-text p { margin: 7px 0 0; color: var(--soft); font-size: .8rem; }
+.grade-calculator-open {
+  margin-top: 9px; padding: 5px 12px; border: 0; border-radius: 999px;
+  color: var(--text); background: var(--red); font: inherit; font-size: .72rem; cursor: pointer;
+}
+.grade-calculator-open:focus-visible, .grade-calculator-step:focus-visible, .grade-calculator-add:focus-visible {
+  outline: 2px solid var(--text); outline-offset: 2px;
+}
+.grade-calculator-target { margin: 0 auto; text-align: center; }
+.grade-calculator-label { margin: 0; text-align: center; }
+.grade-calculator-controls {
+  display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 12px;
+}
+.grade-calculator-step {
+  width: 36px; height: 40px; padding: 0; border: 0; color: var(--text); background: none;
+  font: inherit; font-size: 1.7rem; font-weight: 700; cursor: pointer;
+}
+.grade-calculator-step:disabled { opacity: .4; cursor: default; }
+.grade-calculator-target-value {
+  min-width: 94px; padding: 6px 12px; border-radius: 999px;
+  color: #160606; background: #48df3d; font-size: 1.8rem; font-weight: 700;
+}
+.grade-calculator-needed-label { margin-top: 12px; }
+.grade-calculator-grades {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 12px;
+}
+.grade-calculator-grade, .grade-calculator-add {
+  min-width: 48px; padding: 4px 10px; border: 0; border-radius: 999px;
+  color: #160606; background: #48df3d; font: inherit; font-weight: 700; text-align: center;
+}
+.grade-calculator-add {
+  min-width: 48px; color: #ffcccc; background: #560e0e; font-size: 1.1rem; cursor: pointer;
+}
+.grade-calculator-note { margin: 12px 0 0; color: var(--soft); font-size: .8rem; text-align: center; }
 .grade-subject-list, .grade-list { display: flex; flex-direction: column; gap: 12px; }
 .grade-subject-row {
 .grade-subject-list { max-height: 55vh; overflow-y: auto; overscroll-behavior-y: contain; }

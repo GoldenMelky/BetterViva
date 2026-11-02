@@ -162,14 +162,6 @@ const Grades = (() => {
 
   function renderPeriodNav(showBack = false) {
     const nav = el("div", "grade-period-nav");
-    if (showBack) {
-      const back = button("‹", "grade-period-back", () => {
-        if (history.state?.gradeSubject) history.back();
-        else handleBack();
-      });
-      back.setAttribute("aria-label", "Torna a tutte le materie");
-      nav.append(back);
-    }
     nav.append(renderTabs());
     return nav;
   }
@@ -190,6 +182,98 @@ const Grades = (() => {
     Sheet.open(...nodes);
   }
 
+  function openCalculator(subject) {
+    const contributions = subject.grades
+      .filter((grade) => !grade.canceled && !grade.noAverage)
+      .map((grade) => ({
+        value: grade.decimalValue,
+        weight: grade.weightFactor === undefined ? 1 : grade.weightFactor,
+      }))
+      .filter(({ value, weight }) => (
+        value !== null && value !== undefined && value !== "" && typeof value !== "boolean"
+        && weight !== null && weight !== "" && typeof weight !== "boolean"
+        && Number.isFinite(Number(value)) && Number.isFinite(Number(weight)) && Number(weight) > 0
+      ))
+      .map(({ value, weight }) => ({ value: Number(value), weight: Number(weight) }));
+    const totalWeight = contributions.reduce((sum, grade) => sum + grade.weight, 0);
+    const average = totalWeight
+      ? contributions.reduce((sum, grade) => sum + grade.value * grade.weight, 0) / totalWeight
+      : 0;
+    const initialTarget = average < 6
+      ? 6
+      : Math.min(10, Math.ceil((average + 1) * 2 - 1e-9) / 2);
+    let target = initialTarget;
+    let extraGrades = 0;
+
+    function renderCalculator() {
+      const requiredCount = target <= average
+        ? 0
+        : target >= 10
+          ? 1
+          : Math.max(1, Math.ceil(totalWeight * (target - average) / (10 - target) - 1e-9));
+      const gradeCount = requiredCount + extraGrades;
+      const neededGrade = gradeCount
+        ? Math.min(10, Math.max(1, Math.ceil(
+          (target + totalWeight * (target - average) / gradeCount) * 2 - 1e-9,
+        ) / 2))
+        : null;
+      const nodes = [];
+      nodes.push(el("h2", "sheet-title", subject.subjectName || subject.subjectDesc || "Materia"));
+
+      const targetGroup = el("div", "grade-calculator-target");
+      targetGroup.setAttribute("role", "group");
+      targetGroup.setAttribute("aria-label", "Media desiderata");
+      targetGroup.append(el("p", "grade-calculator-label", "Per avere la media del..."));
+      const targetControls = el("div", "grade-calculator-controls");
+      const decrease = button("−", "grade-calculator-step", () => {
+        target = Math.max(1, target - 0.5);
+        Sheet.update(...renderCalculator());
+      });
+      decrease.setAttribute("aria-label", "Diminuisci la media desiderata");
+      decrease.disabled = target <= 1;
+      const targetValue = el("span", "grade-calculator-target-value", formatCalculatorGrade(target));
+      targetValue.setAttribute("aria-live", "polite");
+      const increase = button("+", "grade-calculator-step", () => {
+        target = Math.min(10, target + 0.5);
+        Sheet.update(...renderCalculator());
+      });
+      increase.setAttribute("aria-label", "Aumenta la media desiderata");
+      increase.disabled = target >= 10;
+      targetControls.append(decrease, targetValue, increase);
+      targetGroup.append(targetControls);
+      nodes.push(targetGroup, el("p", "grade-calculator-label grade-calculator-needed-label", "...devo prendere..."));
+
+      const grades = el("div", "grade-calculator-grades");
+      grades.setAttribute("role", "list");
+      grades.setAttribute("aria-label", "Voti necessari");
+      for (let index = 0; index < gradeCount; index += 1) {
+        const grade = el("span", "grade-calculator-grade", formatCalculatorGrade(neededGrade));
+        grade.setAttribute("role", "listitem");
+        grades.append(grade);
+      }
+      const addGrade = button("+", "grade-calculator-add", () => {
+        extraGrades += 1;
+        Sheet.update(...renderCalculator());
+      });
+      addGrade.setAttribute("aria-label", "Aggiungi una valutazione");
+      grades.append(addGrade);
+      nodes.push(grades);
+
+      if (target >= 10 && average < 10) {
+        nodes.push(el("p", "grade-calculator-note", "La media del 10 non è raggiungibile con un numero finito di voti."));
+      } else if (gradeCount === 0) {
+        nodes.push(el("p", "grade-calculator-note", "Hai già raggiunto questa media. Aggiungi un voto per simulare il risultato."));
+      }
+      return nodes;
+    }
+
+    function formatCalculatorGrade(value) {
+      return Number.isInteger(value) ? String(value) : `${Math.floor(value)}½`;
+    }
+
+    Sheet.open(...renderCalculator());
+  }
+
   function renderSubject(stats) {
     const subject = (stats?.subjects || []).find((item) => item.subjectId === subjectId);
     if (!subject) {
@@ -201,6 +285,7 @@ const Grades = (() => {
     const text = el("div", "grade-summary-text");
     text.append(el("h1", "", subject.subjectName || subject.subjectDesc || "Materia"));
     text.append(el("p", "", `${subject.grades.length} Voti`));
+    text.append(button("Calcola voto", "grade-calculator-open", () => openCalculator(subject)));
     summary.append(text);
 
     const list = el("div", "grade-list");
