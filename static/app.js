@@ -185,6 +185,18 @@ function cachedResponse(data) {
   });
 }
 
+async function loadCachedProfile() {
+  try {
+    const scope = await dbGet("api-cache-scope");
+    if (!scope) return null;
+    const cached = await dbGet(cacheKey(scope, "/api/me"));
+    return cached?.data?.cache_scope === scope ? cached.data : null;
+  } catch (error) {
+    console.error("Impossibile leggere il profilo dalla cache locale.", error);
+    return null;
+  }
+}
+
 // API requests renew an expired session once. GET responses are cached per account.
 async function fetchApi(path, options) {
   return requestWithStatus(async () => {
@@ -488,10 +500,36 @@ if (!window.crypto?.subtle) {
     renderSyncStatus();
     showConnectionToast("Sei offline. Controlla la connessione.");
   }
+  const profileRequest = requestWithStatus(() => fetch("/api/me")).then(
+    (response) => ({ response }),
+    (error) => ({ error }),
+  );
+  const cachedProfile = await loadCachedProfile();
+  if (cachedProfile) await enter(cachedResponse(cachedProfile));
+
   try {
-    const res = await requestWithStatus(() => fetch("/api/me"));
-    if (res.ok) return enter(res);
+    const result = await profileRequest;
+    if ("error" in result) throw result.error;
+    const res = result.response;
+    if (res.ok) {
+      if (cachedProfile) {
+        const freshProfile = await res.clone().json().catch(() => null);
+        if (freshProfile
+          && freshProfile.cache_scope === cachedProfile.cache_scope
+          && freshProfile.setup_needed === cachedProfile.setup_needed
+          && freshProfile.color_setup_pending === cachedProfile.color_setup_pending) {
+          try {
+            await dbSet(cacheKey(freshProfile.cache_scope, "/api/me"), { data: freshProfile });
+          } catch (error) {
+            console.error("Impossibile aggiornare il profilo nella cache locale.", error);
+          }
+          return;
+        }
+      }
+      return enter(res);
+    }
   } catch {
+    if (cachedProfile && currentView === "home") return;
     if (await restoreOfflineHome()) return;
     $("status").textContent = "Server non raggiungibile.";
     return;

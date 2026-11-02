@@ -9,6 +9,7 @@ Backlog ricavato dalla lista originale e contestualizzato all’implementazione 
 - [x] **Pulsante menu:** mantenere il pulsante flottante in posizione fissa in basso a destra nelle schermate autenticate, compresa la configurazione; `#menu-button` e `#app-menu` sono posizionati in `static/style.css` e la visibilità è gestita da `show()` in `static/app.js`.
 - [x] **Tasto indietro:** mostrare il tasto in alto a destra, sotto l’intestazione, in tutte le schermate autenticate tranne la home. Il flusso di ritorno usa `appBack()` e `Sheet.handleBack()` in `static/app.js` e `static/sheet.js`, mantenendo la navigazione interna di voti e configurazione.
 - [x] **Colore predefinito delle materie:** assegnare alle materie senza colore lo stile rosso predefinito in entrambe le viste; `colorSubject()` in `static/home.js` applica il rosso alle materie senza una configurazione colore.
+- [ ] Splash durante caricamento
 
 ## Eventi e vista orario
 

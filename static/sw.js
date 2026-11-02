@@ -1,17 +1,16 @@
 "use strict";
 
 /* Service worker di BetterViva.
-   - Il guscio dell'app viene servito subito dalla cache; la rete aggiorna la copia
-     per l'apertura successiva.
+   - Il guscio dell'app viene servito subito dalla cache, anche offline.
+   - All'avvio gli asset vengono confrontati con la rete; se cambiano, la pagina si ricarica.
    - /api/* non passa mai di qui: i dati personali sono gestiti in IndexedDB per account. */
-const CACHE = "betterviva-v3";
+const CACHE = "betterviva-v4";
 const SHELL = [
   "/",
-  "/static/style.css", "/static/home.js", "/static/grades.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js",
+  "/static/style.css", "/static/home.js", "/static/grades.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js", "/static/pwa.js",
   "/static/manifest.webmanifest",
-  "/static/fonts/inter-latin-400-normal.woff2", "/static/fonts/figtree-latin-400-normal.woff2",
-  "/static/fonts/dongle-latin-400-normal.woff2",
-  "/static/icons/icon-192.png", "/static/icons/icon-512.png",
+  "/static/fonts/figtree-latin-400-normal.woff2",
+  "/static/icons/icon-192.png", "/static/icons/icon-512.png", "/static/icons/icon-maskable-512.png", "/static/icons/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -23,11 +22,62 @@ self.addEventListener("install", (event) => {
   })());
 });
 
+let refreshPromise;
+
+async function sameContent(cached, fresh) {
+  if (!cached) return false;
+  const [cachedBody, freshBody] = await Promise.all([
+    cached.clone().arrayBuffer(),
+    fresh.clone().arrayBuffer(),
+  ]);
+  if (cachedBody.byteLength !== freshBody.byteLength) return false;
+  const cachedBytes = new Uint8Array(cachedBody);
+  const freshBytes = new Uint8Array(freshBody);
+  return cachedBytes.every((byte, index) => byte === freshBytes[index]);
+}
+
+function refreshAssets() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const cache = await caches.open(CACHE);
+    const updates = await Promise.all(SHELL.map(async (url) => {
+      const request = new Request(url, { cache: "no-cache" });
+      const response = await fetch(request);
+      if (!response.ok) throw new Error(`Richiesta asset non riuscita (${response.status}): ${url}`);
+      const cached = await cache.match(request, { ignoreSearch: true });
+      return { request, response, changed: !(await sameContent(cached, response)) };
+    }));
+    const changed = updates.some((update) => update.changed);
+    if (changed) {
+      await Promise.all(updates
+        .filter((update) => update.changed)
+        .map(({ request, response }) => cache.put(request, response)));
+    }
+    return changed;
+  })().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
     await self.clients.claim();
   })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "CHECK_FOR_UPDATES") return;
+  event.waitUntil(refreshAssets().then((changed) => {
+    if (changed) {
+      return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) client.postMessage({ type: "ASSETS_UPDATED" });
+      });
+    }
+  }).catch((error) => {
+    console.error("Impossibile aggiornare la cache degli asset.", error);
+  }));
 });
 
 self.addEventListener("fetch", (event) => {
@@ -36,16 +86,11 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;                      // mai in cache
   if (url.pathname !== "/" && !url.pathname.startsWith("/static/")) return;
 
-  const network = fetch(req, { cache: "no-cache" }).then(async (res) => {
-    if (res.ok) await (await caches.open(CACHE)).put(req, res.clone());
-    return res;
-  });
-  event.waitUntil(network.catch((err) => console.error("Aggiornamento asset non riuscito.", err)));
   event.respondWith((async () => {
     const cached = await caches.match(req, { ignoreSearch: true });
-    if (cached) {
-      return cached;
-    }
-    return network;
+    if (cached) return cached;
+    const response = await fetch(req);
+    if (response.ok) await (await caches.open(CACHE)).put(req, response.clone());
+    return response;
   })());
 });

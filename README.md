@@ -22,7 +22,7 @@ Giustamente per ottenere i dati del tuo account ClasseViva, servono le credenzia
 
 Le credenziali possono essere salvate cifrate nel browser e vengono mandate al backend ogni volta che il token scade.
 
-Gli eventi di agenda e compiti vengono unificati in un singolo dataset per tutto l'anno scolastico; home e calendario lo condividono, filtrando nel calendario verifiche e interrogazioni. Eventi, orario e configurazione vengono conservati in IndexedDB per account e mostrati subito alle aperture successive; l'app li aggiorna in background quando il server è raggiungibile. Il logout elimina i dati personali memorizzati localmente. Anche HTML, JavaScript, CSS e gli altri asset statici vengono serviti dalla cache mentre si aggiornano in background.
+Gli eventi di agenda e compiti vengono unificati in un singolo dataset per tutto l'anno scolastico; home e calendario lo condividono, filtrando nel calendario verifiche e interrogazioni. Il profilo e i dati (eventi, orario e configurazione) vengono conservati in IndexedDB per account e mostrati subito alle aperture successive; la richiesta al server convalida la sessione e aggiorna i dati in background. Il logout elimina i dati personali memorizzati localmente. Anche HTML, JavaScript, CSS e gli altri asset statici vengono serviti dalla cache mentre si aggiornano in background.
 
 Sul server vengono salvate la configurazione dell'orario e le preferenze delle materie (nome, laboratorio e colore); la cache locale include anche i dati necessari a mostrare eventi e calendario senza attesa.
 
