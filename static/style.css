@@ -360,7 +360,7 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 .grade-period-tabs {
   display: flex; flex: 1; align-items: center; gap: 24px; min-width: 0;
   padding: 0 22px; overflow-x: auto; overscroll-behavior-x: contain;
-  scrollbar-width: none; scroll-behavior: smooth;
+  scrollbar-width: none;
 }
 .grade-period-tabs::-webkit-scrollbar { display: none; }
 .grade-period-spacer { flex: 0 0 0; }
@@ -383,6 +383,7 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 .grade-ring.orange { --grade-color: #ff9d32; }
 .grade-ring.red { --grade-color: #ed4038; }
 .grade-ring.blue { --grade-color: #48a9ff; }
+.grade-subject-page { touch-action: pan-y; transition: transform 220ms ease-out; will-change: transform; }
 .grade-summary-text { min-width: 0; }
 .grade-summary-text h1 { margin: 0; font-size: 1.45rem; line-height: 1.15; text-align: left; overflow-wrap: anywhere; }
 .grade-summary-text p { margin: 7px 0 0; color: var(--soft); font-size: .8rem; }

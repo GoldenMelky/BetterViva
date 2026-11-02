@@ -48,7 +48,7 @@ const Grades = (() => {
       : periods().find((period) => period.periodPos === periodPos) || data?.overall;
   }
 
-  function centerPeriodTab(tabs, behavior = "smooth") {
+  function centerPeriodTab(tabs) {
     const active = tabs.querySelector(".grade-period-tab.active");
     if (!active) return;
     const [before, after] = tabs.querySelectorAll(".grade-period-spacer");
@@ -59,27 +59,38 @@ const Grades = (() => {
     tabs.scrollTo({
       left: active.getBoundingClientRect().left - tabs.getBoundingClientRect().left + tabs.scrollLeft
         - (tabs.clientWidth - active.clientWidth) / 2,
-      behavior,
+      behavior: "instant",
     });
   }
 
   function renderTabs() {
     const tabs = el("div", "grade-period-tabs");
-    const items = [{ periodPos: null, periodLabel: "Tutto l’anno" },
+    const subjectItems = subjectId == null ? null : selectedStats()?.subjects || [];
+    const items = subjectItems || [{ periodPos: null, periodLabel: "Tutto l’anno" },
       ...(periods().length > 1 ? periods() : [])];
+    tabs.setAttribute("aria-label", subjectItems ? "Materie" : "Periodi");
     const before = el("span", "grade-period-spacer");
     const after = el("span", "grade-period-spacer");
     before.setAttribute("aria-hidden", "true");
     after.setAttribute("aria-hidden", "true");
     tabs.append(before);
     for (const item of items) {
-      const tab = button(item.periodLabel, "grade-period-tab", () => {
-        periodPos = item.periodPos;
-        subjectId = null;
-        render();
+      const isSubjectTab = subjectItems !== null;
+      const label = isSubjectTab
+        ? item.subjectName || item.subjectDesc || "Materia"
+        : item.periodLabel;
+      const isActive = isSubjectTab ? item.subjectId === subjectId : item.periodPos === periodPos;
+      const tab = button(label, "grade-period-tab", () => {
+        if (isSubjectTab) {
+          navigateToSubject(item.subjectId);
+        } else {
+          periodPos = item.periodPos;
+          subjectId = null;
+          render();
+        }
       });
-      tab.classList.toggle("active", item.periodPos === periodPos);
-      tab.setAttribute("aria-pressed", String(item.periodPos === periodPos));
+      tab.classList.toggle("active", isActive);
+      tab.setAttribute("aria-pressed", String(isActive));
       tabs.append(tab);
     }
     tabs.append(after);
@@ -288,6 +299,7 @@ const Grades = (() => {
     text.append(button("Calcola voto", "grade-calculator-open", () => openCalculator(subject)));
     summary.append(text);
 
+    const page = el("div", "grade-subject-page");
     const list = el("div", "grade-list");
     const sortedGrades = [...subject.grades].sort((a, b) => {
       const byDate = String(b.evtDate || "").localeCompare(String(a.evtDate || ""));
@@ -306,7 +318,8 @@ const Grades = (() => {
       row.append(text);
       list.append(row);
     }
-    root().replaceChildren(renderPeriodNav(true), summary, list);
+    page.append(summary, list);
+    root().replaceChildren(renderPeriodNav(true), page);
   }
 
   function render() {
@@ -315,6 +328,101 @@ const Grades = (() => {
     if (subjectId != null) return renderSubject(stats);
     renderOverview(stats);
   }
+
+  let touchStart = null;
+  let subjectTransitioning = false;
+
+  function finishSubjectTransition(nextSubjectId, offset) {
+    subjectId = nextSubjectId;
+    render();
+    const incomingPage = root().querySelector(".grade-subject-page");
+    if (incomingPage) {
+      incomingPage.style.transition = "none";
+      incomingPage.style.transform = `translateX(${-offset}px)`;
+      incomingPage.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        incomingPage.style.transition = "";
+        incomingPage.style.transform = "";
+      });
+    }
+    subjectTransitioning = false;
+  }
+
+  function navigateToSubject(nextSubjectId, offset = null) {
+    if (subjectTransitioning || nextSubjectId === subjectId) return;
+    const subjects = selectedStats()?.subjects || [];
+    const currentIndex = subjects.findIndex((subject) => subject.subjectId === subjectId);
+    const nextIndex = subjects.findIndex((subject) => subject.subjectId === nextSubjectId);
+    if (currentIndex < 0 || nextIndex < 0) return;
+
+    const page = root().querySelector(".grade-subject-page");
+    if (!page) {
+      subjectId = nextSubjectId;
+      render();
+      return;
+    }
+    const distance = offset ?? (nextIndex > currentIndex ? -1 : 1) * page.clientWidth;
+    subjectTransitioning = true;
+    page.style.transition = "transform 220ms ease-out";
+    page.style.transform = `translateX(${distance}px)`;
+
+    let completed = false;
+    let timeout;
+    const finish = (event) => {
+      if (completed || (event && (event.target !== page || event.propertyName !== "transform"))) return;
+      completed = true;
+      clearTimeout(timeout);
+      page.removeEventListener("transitionend", finish);
+      finishSubjectTransition(nextSubjectId, distance);
+    };
+    page.addEventListener("transitionend", finish);
+    timeout = setTimeout(finish, 260);
+  }
+
+  root().addEventListener("touchstart", (event) => {
+    const page = event.target.closest(".grade-subject-page");
+    if (subjectId == null || subjectTransitioning || event.touches.length !== 1 || !page
+      || event.target.closest(".grade-calculator-open")) {
+      touchStart = null;
+      return;
+    }
+    touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY, page, axis: null };
+  }, { passive: true });
+  root().addEventListener("touchmove", (event) => {
+    if (!touchStart || event.touches.length !== 1 || subjectTransitioning) return;
+    const dx = event.touches[0].clientX - touchStart.x;
+    const dy = event.touches[0].clientY - touchStart.y;
+    if (touchStart.axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      touchStart.axis = Math.abs(dx) > Math.abs(dy) * 1.25 ? "horizontal" : "vertical";
+    }
+    if (touchStart.axis !== "horizontal") return;
+    event.preventDefault();
+    touchStart.page.style.transition = "none";
+    touchStart.page.style.transform = `translateX(${dx}px)`;
+  }, { passive: false });
+  function finishTouchNavigation(event, cancelled = false) {
+    if (!touchStart) return;
+    const gesture = touchStart;
+    touchStart = null;
+    if (gesture.axis !== "horizontal") return;
+    const dx = cancelled || !event.changedTouches?.length
+      ? 0
+      : event.changedTouches[0].clientX - gesture.x;
+    const subjects = selectedStats()?.subjects || [];
+    const currentIndex = subjects.findIndex((subject) => subject.subjectId === subjectId);
+    const nextIndex = currentIndex + (dx < 0 ? 1 : -1);
+    if (Math.abs(dx) >= 48 && nextIndex >= 0 && nextIndex < subjects.length) {
+      navigateToSubject(subjects[nextIndex].subjectId, dx < 0 ? -gesture.page.clientWidth : gesture.page.clientWidth);
+      return;
+    }
+    gesture.page.style.transition = "transform 180ms ease-out";
+    gesture.page.style.transform = "";
+    setTimeout(() => {
+      gesture.page.style.transition = "";
+    }, 200);
+  }
+  root().addEventListener("touchend", (event) => finishTouchNavigation(event), { passive: true });
+  root().addEventListener("touchcancel", (event) => finishTouchNavigation(event, true), { passive: true });
 
   async function load() {
     if (loading) return;
@@ -366,7 +474,7 @@ const Grades = (() => {
   });
   window.addEventListener("resize", () => {
     const tabs = root().querySelector(".grade-period-tabs");
-    if (tabs) requestAnimationFrame(() => centerPeriodTab(tabs, "auto"));
+    if (tabs) requestAnimationFrame(() => centerPeriodTab(tabs));
   });
 
   return { open, handleBack };
