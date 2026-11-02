@@ -77,6 +77,7 @@
     <section id="view-home" hidden>
       <div class="daybar">
         <div id="days" class="days" aria-label="Giorni"></div>
+        <button id="today-button" class="today-button" type="button">Oggi</button>
         <button id="mode-toggle" class="mode-toggle" type="button" role="switch" aria-checked="false" data-mode="orario" aria-label="Vista eventi" title="Cambia vista">
           <span class="knob">
             <svg class="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -87,13 +88,15 @@
       <div id="panels" class="panels"></div>
       <div id="evlist" class="evlist" hidden></div>
 
-      <!-- Calendario del mese con verifiche e interrogazioni -->
+      <!-- Calendario annuale: usa gli stessi eventi della home -->
       <section id="cal" class="cal" aria-labelledby="cal-title" hidden>
         <h2 id="cal-title">Verifiche e interrogazioni</h2>
         <div class="cal-week" aria-hidden="true">
           <span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span>
         </div>
-        <div id="cal-grid" class="cal-grid"></div>
+        <div id="cal-scroll" class="cal-scroll" tabindex="0" aria-label="Calendario dell'anno scolastico">
+          <div id="cal-months"></div>
+        </div>
       </section>
     </section>
 

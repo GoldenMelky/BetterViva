@@ -1,8 +1,6 @@
 "use strict";
 
-/* Calendario del mese: una cella per giorno, con un'icona per ogni tipo di prova
-   (verifica = foglio, interrogazione = fumetto). I dati arrivano da /api/calendar.
-   Toccando un giorno si apre la scheda con le prove di quel giorno (sheet.js). */
+/* Il calendario riusa gli eventi annuali della home e mostra solo le prove. */
 const Calendar = (() => {
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const SVG = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
@@ -11,65 +9,107 @@ const Calendar = (() => {
     interrogazione: SVG('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/>'),
   };
   const NAME = { verifica: "Verifica", interrogazione: "Interrogazione" };
-  let loading = false, pendingData = null;
+  let scroll, months, positionedYear = null, renderedData = null;
 
-  const isoDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
-  const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const isoDate = (value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+  const key = (day) => `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+
+  function goToToday(smooth = true) {
+    if (!scroll || !renderedData) return;
+    const first = isoDate(renderedData.start), today = isoDate(renderedData.today);
+    const monthIndex = (today.getFullYear() - first.getFullYear()) * 12 + today.getMonth() - first.getMonth();
+    const left = monthIndex * scroll.clientWidth;
+    if (smooth) scroll.scrollTo({ left, behavior: "smooth" });
+    else scroll.scrollLeft = left;
+  }
 
   function render(data) {
-    const grid = document.getElementById("cal-grid");
-    const byDay = {};
-    data.events.forEach((e) => (byDay[e.date] ||= []).push(e));
+    if (!scroll) {
+      scroll = document.getElementById("cal-scroll");
+      months = document.getElementById("cal-months");
+    }
+    if (data === renderedData) return;
 
-    const start = isoDate(data.start), end = isoDate(data.end);
-    const days = Math.round((end - start) / 864e5) + 1;   // il round assorbe il cambio d'ora
-    grid.replaceChildren();
-    for (let i = 0; i < days; i++) {
-      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-      const k = key(d), tests = byDay[k] || [];
+    const byDay = new Map();
+    data.events.filter((event) => NAME[event.kind]).forEach((event) => {
+      if (!byDay.has(event.date)) byDay.set(event.date, []);
+      byDay.get(event.date).push(event);
+    });
 
-      const cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = "cd" + (k < data.today ? " past" : "") + (k === data.today ? " today" : "");
-      const n = document.createElement("span");
-      n.className = "n"; n.textContent = d.getDate();
-      cell.append(n);
+    const first = isoDate(data.start), last = isoDate(data.end), today = data.today;
+    const yearChanged = positionedYear !== data.start;
+    const previousMonth = yearChanged ? null : Math.round(scroll.scrollLeft / (scroll.clientWidth || 1));
+    months.replaceChildren();
 
-      if (tests.length) {
-        const kinds = [...new Set(tests.map((e) => e.kind))];
-        const ic = document.createElement("span");
-        ic.className = "ic";
-        ic.innerHTML = kinds.map((kind) => ICONS[kind] || "").join("");   // stringhe fisse del codice, mai dati del server
-        cell.append(ic);
-        const what = tests.map((e) => `${NAME[e.kind] || e.kind}${e.subject ? " di " + e.subject : ""}`).join(", ");
-        cell.title = what;
-        cell.setAttribute("aria-label", `${d.getDate()} ${MONTHS[d.getMonth()]}: ${what}`);
+    for (let month = new Date(first.getFullYear(), first.getMonth(), 1);
+      month <= last;
+      month = new Date(month.getFullYear(), month.getMonth() + 1, 1)) {
+      const monthSection = document.createElement("section");
+      monthSection.className = "cal-month";
+      const heading = document.createElement("h3");
+      heading.textContent = `${MONTHS[month.getMonth()]} ${month.getFullYear()}`;
+      monthSection.append(heading);
+
+      const grid = document.createElement("div");
+      grid.className = "cal-grid";
+      const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+      const firstOffset = (new Date(month.getFullYear(), month.getMonth(), 1).getDay() + 6) % 7;
+      const weekCount = Math.ceil((firstOffset + daysInMonth) / 7);
+      for (let week = 0; week < weekCount; week++) {
+        const row = document.createElement("div");
+        row.className = "cal-row";
+        for (let weekday = 0; weekday < 7; weekday++) {
+          const dayNumber = week * 7 + weekday - firstOffset + 1;
+          if (dayNumber < 1 || dayNumber > daysInMonth) {
+            const empty = document.createElement("span");
+            empty.className = "cd-empty";
+            row.append(empty);
+            continue;
+          }
+
+          const day = new Date(month.getFullYear(), month.getMonth(), dayNumber);
+          const dayKey = key(day), tests = byDay.get(dayKey) || [];
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "cd" + (dayKey < today ? " past" : "") + (dayKey === today ? " today" : "");
+          const number = document.createElement("span");
+          number.className = "n";
+          number.textContent = String(dayNumber);
+          cell.append(number);
+
+          if (tests.length) {
+            const kinds = [...new Set(tests.map((event) => event.kind))];
+            const icons = document.createElement("span");
+            icons.className = "ic";
+            icons.innerHTML = kinds.map((kind) => ICONS[kind]).join("");
+            cell.append(icons);
+            const description = tests.map((event) => `${NAME[event.kind]}${event.subject ? ` di ${event.subject}` : ""}`).join(", ");
+            cell.title = description;
+            cell.setAttribute("aria-label", `${dayNumber} ${MONTHS[day.getMonth()]}: ${description}`);
+          } else {
+            cell.setAttribute("aria-label", `${dayNumber} ${MONTHS[day.getMonth()]}`);
+          }
+          cell.addEventListener("click", () => EventSheet.showDay(dayKey, tests));
+          row.append(cell);
+        }
+        grid.append(row);
       }
-      cell.addEventListener("click", () => EventSheet.showDay(k, tests));
-      grid.append(cell);
+      monthSection.append(grid);
+      months.append(monthSection);
     }
+
     document.getElementById("cal").hidden = false;
-  }
-
-  async function load() {
-    loading = true;
-    pendingData = null;
-    try {
-      const res = await api("/api/calendar");
-      if (!res.ok) throw new Error(`Risposta calendario ${res.status}`);
-      render(pendingData || await res.json());
-    } catch (error) {
-      console.error("Impossibile caricare il calendario.", error);
-    } finally {
-      loading = false;
+    renderedData = data;
+    if (yearChanged) {
+      positionedYear = data.start;
+      requestAnimationFrame(() => goToToday(false));
+    } else if (previousMonth !== null) {
+      requestAnimationFrame(() => { scroll.scrollLeft = previousMonth * scroll.clientWidth; });
     }
   }
 
-  window.addEventListener("bv-api-cache-update", ({ detail }) => {
-    if (detail.path !== "/api/calendar") return;
-    if (loading) pendingData = detail.data;
-    else render(detail.data);
-  });
-
-  return { load };
+  return { load: render, goToToday };
 })();

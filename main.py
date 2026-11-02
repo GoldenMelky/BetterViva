@@ -292,6 +292,7 @@ def with_done(data: dict, username: str) -> dict:
     stato separato dalla cache degli eventi evita di invalidarla quando un
     compito viene segnato come svolto.
     """
+    data["today"] = date.today().isoformat()
     done = db.get_done_events(username)
     for event in data["events"]:
         event["done"] = event["id"] in done
@@ -299,31 +300,29 @@ def with_done(data: dict, username: str) -> dict:
 
 
 @app.get("/api/events")
-def events(request: Request, days: int = 14, start: date | None = None):
-    """Restituisce gli eventi scolastici nell'intervallo richiesto.
+def events(request: Request):
+    """Restituisce tutti gli eventi dell'anno scolastico corrente.
 
-    `start` indica il primo giorno incluso e, se omesso, corrisponde a oggi;
-    `days` indica lo scarto in giorni fino all'ultimo giorno incluso ed è limitato
-    all'intervallo 1-60. Riutilizza per dieci minuti la cache della sessione se
-    data iniziale e scarto coincidono; altrimenti recupera i dati da ClasseViva,
-    applica le correzioni manuali e aggiunge lo stato di completamento. Solleva
-    HTTP 502 se il recupero fallisce.
+    Agenda e compiti vengono unificati in un unico elenco e riutilizzati dalla
+    home e dal calendario. La risposta viene memorizzata per dieci minuti;
+    solleva HTTP 502 se il recupero da ClasseViva fallisce.
     """
     s = current_session(request)
-    days = max(1, min(days, 60))
-    start = start or date.today()
+    today = date.today()
+    start, end = timetable.school_year_bounds(today)
+    year = timetable.school_year(today)
     cached = s.get("events")
-    if cached and cached["start"] == start.isoformat() and cached["days"] == days and time.time() - cached["at"] < 600:
+    if cached and cached["year"] == year and time.time() - cached["at"] < 600:
         return with_done(cached["data"], s["studentId"])
     try:
-        found = build_events(s["user"], days, load_subjects(s), subject_names(s), schedule_by_weekday(s),
-                             since=start, until=start + timedelta(days=days))
-        data = {"today": date.today().isoformat(),
+        found = build_events(s["user"], load_subjects(s), subject_names(s), schedule_by_weekday(s),
+                             since=start, until=end)
+        data = {"today": today.isoformat(), "start": start.isoformat(), "end": end.isoformat(),
                 "events": overrides.apply(found, db.get_event_overrides(s["studentId"]))}
     except (requests.RequestException, KeyError, ValueError, TypeError):
         log.exception("events: errore nel recupero dei dati")
         raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
-    s["events"] = {"at": time.time(), "start": start.isoformat(), "days": days, "data": data}
+    s["events"] = {"at": time.time(), "year": year, "data": data}
     return with_done(data, s["studentId"])
 
 
@@ -343,8 +342,7 @@ def set_event_kind(event_id: str, body: KindIn, request: Request):
     if not re.fullmatch(r"[0-9a-f]{12}", event_id):
         raise HTTPException(422, "Id evento non valido")
     db.set_event_override(s["studentId"], event_id, body.kind or "none")
-    s.pop("events", None)      # le cache contengono il vecchio `kind`
-    s.pop("calendars", None)
+    s.pop("events", None)      # la cache contiene il vecchio `kind`
     return {"ok": True}
 
 
@@ -364,39 +362,6 @@ def set_event_done(event_id: str, body: DoneIn, request: Request):
         raise HTTPException(422, "Id evento non valido")
     db.set_event_done(s["studentId"], event_id, body.done)
     return {"ok": True}
-
-
-@app.get("/api/calendar")
-def calendar(request: Request, month: date | None = None):
-    """Restituisce le prove del mese richiesto, oppure del mese corrente.
-
-    L'intervallo copre settimane complete dal lunedì della prima settimana del
-    mese alla domenica dell'ultima. Le risposte sono memorizzate per mese per
-    dieci minuti e contengono solo eventi classificati come prove.
-    Solleva HTTP 502 se ClasseViva non fornisce i dati necessari.
-    """
-    s = current_session(request)
-    today = date.today()
-    first = (month or today).replace(day=1)
-    month_key = first.isoformat()
-    calendars = s.setdefault("calendars", {})
-    cached = calendars.get(month_key)
-    if cached and time.time() - cached["at"] < 600:
-        return cached["data"]
-    last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-    start = first - timedelta(days=first.weekday())
-    end = last + timedelta(days=6 - last.weekday())
-    try:
-        events = build_events(s["user"], 0, load_subjects(s), subject_names(s), schedule_by_weekday(s),
-                              since=start, until=end)
-        overrides.apply(events, db.get_event_overrides(s["studentId"]))
-    except (requests.RequestException, KeyError, ValueError, TypeError):
-        log.exception("calendar: errore nel recupero dei dati")
-        raise HTTPException(502, "ClasseViva non ha restituito i dati. Riprova più tardi.")
-    data = {"today": today.isoformat(), "start": start.isoformat(), "end": end.isoformat(),
-            "events": [e for e in events if e["kind"]]}
-    calendars[month_key] = {"at": time.time(), "data": data}
-    return data
 
 
 @app.get("/api/grades")

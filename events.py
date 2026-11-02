@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 from verifiche import classify
@@ -115,13 +115,12 @@ def _event(item: dict, day: str, source: str, subjects: dict, resolve, names: di
     }
 
 
-def build_events(user, days: int, subject_list: list[dict] | None = None,
+def build_events(user, subject_list: list[dict] | None = None,
                  names: dict[int, str] | None = None,
                  schedule: dict[int, list[int]] | None = None,
-                 since: date | None = None, until: date | None = None) -> list[dict]:
-    """Eventi da `since` (default oggi) a `until` (default oggi + days), estremi inclusi."""
-    first = since or date.today()
-    last = until or first + timedelta(days=days)
+                 *, since: date, until: date) -> list[dict]:
+    """Unifica agenda e compiti nell'intervallo inclusivo indicato."""
+    first, last = since, until
     api_date_format = "%Y%m%d"
     agenda_response = user.agenda(first.strftime(api_date_format), last.strftime(api_date_format))
     if not isinstance(agenda_response, dict):

@@ -64,6 +64,12 @@ def school_year(d: date) -> str:
     return f"{y}-{(y + 1) % 100:02d}"
 
 
+def school_year_bounds(d: date) -> tuple[date, date]:
+    """Restituisce il primo e l'ultimo giorno dell'anno scolastico di `d`."""
+    year = d.year if d.month >= 9 else d.year - 1
+    return date(year, 9, 1), date(year + 1, 8, 31)
+
+
 def lookback_start(today: date) -> date:
     """Prima data da cui leggere le lezioni (mai prima dell'inizio dell'anno)."""
     year_start = date(today.year if today.month >= 9 else today.year - 1, 9, 1)

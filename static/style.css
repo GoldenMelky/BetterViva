@@ -140,8 +140,16 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 /* Calendario: verifiche e interrogazioni */
 .cal { margin-top: 24px; }
 .cal h2 { margin: 0 0 14px; font-size: 20px; line-height: 21px; font-weight: 400; text-align: center; }
-.cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-week { display: grid; grid-template-columns: repeat(7, 1fr); }
 .cal-week span { padding-bottom: 6px; font-size: 17px; text-align: center; border-bottom: 1px solid var(--line); }
+.cal-scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; scroll-snap-type: x mandatory; }
+.cal-scroll::-webkit-scrollbar { display: none; }
+#cal-months { display: flex; align-items: stretch; }
+.cal-month { flex: 0 0 100%; min-width: 0; padding: 10px 0 16px; scroll-snap-align: start; scroll-snap-stop: always; }
+.cal-month h3 { margin: 0 0 5px; font-size: 16px; font-weight: 500; text-align: center; text-transform: capitalize; }
+.cal-grid { display: flex; flex-direction: column; }
+.cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cd-empty { min-height: 50px; border-bottom: 1px solid var(--line); }
 
 @media (orientation: landscape) and (min-width: 768px) {
   main:has(#view-home:not([hidden])) { max-width: 1200px; }
@@ -194,6 +202,7 @@ button:disabled { opacity: .6; cursor: default; }
 
 /* Toggle vista orario / eventi */
 .mode-toggle { position: relative; flex: 0 0 auto; width: 46px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; }
+.today-button { flex: 0 0 auto; padding: 6px 10px; border: 0; border-radius: 999px; color: var(--text); background: var(--card); font: inherit; font-size: .85rem; cursor: pointer; }
 .mode-toggle::after { content: ""; position: absolute; inset: -10px -6px; }
 .mode-toggle .knob {
   position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; display: grid; place-items: center;

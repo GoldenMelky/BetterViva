@@ -18,9 +18,10 @@ const Home = (() => {
   const MODE_KEY = "bv_home_mode";
   const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
 
-  let sel, panels, list, toggle;
+  let sel, panels, list, toggle, todayButton;
   let items = [], sections = [], secDay = [], doneRefs = new Map(), eventsById = new Map();
-  let windowStart = null, eventData = [], timetableData = null, homeData = null, shifting = false, shiftQueued = false;
+  let windowStart = null, yearStart = null, yearEnd = null;
+  let timetableData = null, homeData = null;
   let loading = false, pendingEvents = null, pendingTimetable = null, hasPendingTimetable = false;
   let mode = "orario", driver = null, timer = null;
   let touching = false, glideId = 0;     // dito appoggiato / animazione del selettore in corso
@@ -33,6 +34,8 @@ const Home = (() => {
   const shiftDate = (d, days) => { const out = new Date(d); out.setDate(out.getDate() + days); return out; };
   const dayOffset = (from, to) => Math.round((Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) / 864e5);
   const dateAt = (index) => shiftDate(windowStart, index);
+  const windowOffset = () => dayOffset(yearStart, windowStart);
+  const lastWindowStart = () => shiftDate(yearEnd, -Math.min(WINDOW_DAYS, dayOffset(yearStart, yearEnd) + 1) + 1);
 
   /* ---- le due viste: come leggere/impostare la posizione ----
      p = giorno del selettore (anche frazionario). Nella vista eventi i giorni senza eventi non hanno
@@ -48,6 +51,7 @@ const Home = (() => {
   }
   function listSet(p) {
     if (!sections.length) return;
+    p += windowOffset();
     const n = sections.length;
     let k = 0;
     while (k < n - 1 && secDay[k + 1] <= p) k++;
@@ -58,6 +62,7 @@ const Home = (() => {
   // a riposo su un giorno: l'elenco mostra quel giorno, o il primo successivo che ha eventi
   function listSnap(idx, smooth = false) {
     if (!sections.length) return;
+    idx += windowOffset();
     const k = secDay.findIndex((d) => d >= idx);
     const top = sections[k < 0 ? sections.length - 1 : k].offsetTop;
     if (smooth) list.scrollTo({ top, behavior: "smooth" }); else list.scrollTop = top;
@@ -65,7 +70,7 @@ const Home = (() => {
   const panelsSet = (p) => { panels.scrollLeft = p * panels.clientWidth; };
   const views = {
     orario: { el: () => panels, get: () => panels.scrollLeft / (panels.clientWidth || 1), set: panelsSet, snap: panelsSet },
-    eventi: { el: () => list, get: listPos, set: listSet, snap: listSnap },
+    eventi: { el: () => list, get: () => listPos() - windowOffset(), set: listSet, snap: listSnap },
   };
   const view = () => views[mode];
 
@@ -157,10 +162,6 @@ const Home = (() => {
   }
 
   const hasRow = (e) => e.text || isHomework(e);
-  const mergeEvents = (existing, incoming) => [
-    ...new Map([...existing, ...incoming].map((event) => [event.id, event])).values(),
-  ];
-
   /* ---- vista orario ---- */
   function fillPanel(panel, events, lessons, subjectConfig) {
     const used = new Set();
@@ -278,9 +279,17 @@ const Home = (() => {
 
   function onScroll(src) {
     if (driver !== src) return;          // ignora gli scroll provocati dal follower (o dall'animazione)
-    const p = position(src);
-    if (src === "sel") view().set(p);
-    else sel.scrollLeft = p * SLOT;
+    let p = position(src);
+    if (src === "sel") {
+      view().set(p);
+    } else if (mode === "eventi") {
+      const absoluteDay = listPos();
+      ensureWindowForDay(absoluteDay);
+      p = absoluteDay - windowOffset();
+      sel.scrollLeft = p * SLOT;
+    } else {
+      sel.scrollLeft = p * SLOT;
+    }
     paint(p);
     arm();
   }
@@ -352,19 +361,30 @@ const Home = (() => {
     if (save) { try { localStorage.setItem(MODE_KEY, mode); } catch { /* preferenza non salvata */ } }
   }
 
-  function render(data, tt, selectedDate = null) {
+  function render(data, tt, selectedDate = null, preserveEventsScroll = false) {
+    const savedEventsScroll = preserveEventsScroll ? list.scrollTop : null;
     homeData = data;
     const today = isoDate(data.today);
+    yearStart = isoDate(data.start);
+    yearEnd = isoDate(data.end);
+    const lastStart = lastWindowStart();
+    if (!windowStart || windowStart < yearStart || windowStart > lastStart) {
+      windowStart = shiftDate(today, -INITIAL_PAST);
+      if (windowStart < yearStart) windowStart = yearStart;
+      if (windowStart > lastStart) windowStart = lastStart;
+    }
+    const visibleDays = Math.min(WINDOW_DAYS, dayOffset(windowStart, yearEnd) + 1);
     const byDay = {};
     eventsById = new Map();
     data.events.forEach((e) => { (byDay[e.date] ||= []).push(e); eventsById.set(e.id, e); });
-    eventData = data.events;
-
-    const selected = selectedDate || (items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : shiftDate(today, startDay()));
-    const keep = Math.max(0, Math.min(WINDOW_DAYS - 1, dayOffset(windowStart, selected)));
+    const currentSelection = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : shiftDate(today, startDay());
+    const requestedSelection = selectedDate || currentSelection;
+    const selected = requestedSelection < yearStart || requestedSelection > yearEnd
+      ? shiftDate(today, startDay()) : requestedSelection;
+    const keep = Math.max(0, Math.min(visibleDays - 1, dayOffset(windowStart, selected)));
     sel.replaceChildren(); panels.replaceChildren(); list.replaceChildren();
     items = []; sections = []; secDay = []; doneRefs = new Map();
-    for (let i = 0; i < WINDOW_DAYS; i++) {
+    for (let i = 0; i < visibleDays; i++) {
       const d = dateAt(i), relativeDay = dayOffset(today, d);
       const labels = relativeDay >= -1 && relativeDay <= 1
         ? [RELATIVE[relativeDay + 1]] : [String(d.getDate()), WEEKDAYS[d.getDay()]];
@@ -381,74 +401,84 @@ const Home = (() => {
       fillPanel(panel, events, lessons, tt?.subjects);
       panels.append(panel);
 
+    }
+    Object.keys(byDay).sort().forEach((date) => {
+      const d = isoDate(date), absoluteDay = dayOffset(yearStart, d);
+      const events = byDay[date], lessons = lessonsOf(tt, d);
       const sec = document.createElement("section");
       sec.className = "evday";
-      if (fillDay(sec, d, relativeDay, events, lessons, tt?.subjects)) { // i giorni senza eventi non entrano nell'elenco
-        list.append(sec); sections.push(sec); secDay.push(i);
-      }
-    }
+      fillDay(sec, d, dayOffset(today, d), events, lessons, tt?.subjects);
+      list.append(sec);
+      sections.push(sec);
+      secDay.push(absoluteDay);
+    });
     if (!sections.length) list.append(line("p", "evnone", "Nessun evento"));
     driver = null;
     sel.scrollLeft = keep * SLOT;
-    view().snap(keep);
+    if (savedEventsScroll === null) view().snap(keep);
+    else list.scrollTop = savedEventsScroll;
     paint(keep);
+    Calendar.load(data);
   }
 
-  async function shiftWindow(direction) {
-    if (shifting) { shiftQueued = true; return; }
+  function ensureWindowForDay(absoluteDay) {
+    if (!homeData || !yearStart || !yearEnd) return;
+    const boundedDay = Math.max(0, Math.min(dayOffset(yearStart, yearEnd), Math.round(absoluteDay)));
+    const date = shiftDate(yearStart, boundedDay);
+    const visibleDays = Math.min(WINDOW_DAYS, dayOffset(windowStart, yearEnd) + 1);
+    if (date >= windowStart && date <= dateAt(visibleDays - 1)) return;
+
+    let nextStart = shiftDate(date, -Math.floor(WINDOW_DAYS / 2));
+    if (nextStart < yearStart) nextStart = yearStart;
+    const lastStart = lastWindowStart();
+    if (nextStart > lastStart) nextStart = lastStart;
+    if (nextStart.getTime() === windowStart.getTime()) return;
+
+    windowStart = nextStart;
+    render(homeData, timetableData, date, true);
+    driver = "view";
+    setSnap(list, true);
+    setSnap(sel, false);
+  }
+
+  function shiftWindow(direction) {
     if (!items.length || !windowStart) return;
-    shifting = true;
-    const currentEnd = dateAt(WINDOW_DAYS - 1);
-    const nextStart = shiftDate(windowStart, direction * WINDOW_SHIFT);
-    const fetchStart = direction < 0 ? nextStart : shiftDate(currentEnd, 1);
-    try {
-      const res = await api(`/api/events?start=${key(fetchStart)}&days=${WINDOW_SHIFT - 1}`);
-      if (!res.ok) throw new Error(res.status);
-      const chunk = await res.json();
-      if (driver || touching) {
-        eventData = mergeEvents(eventData, chunk.events);
-        shiftQueued = true;
-        return;
-      }
-      const selected = dateAt(clamp(Math.round(sel.scrollLeft / SLOT)));   // posizione di adesso, non di prima del fetch
-      eventData = mergeEvents(eventData, chunk.events);
-      windowStart = nextStart;
-      render({ today: chunk.today, events: eventData }, timetableData, selected);
-      document.getElementById("status").textContent = "";
-    } catch (e) {
-      if (e instanceof LoginError) showLogin(e.message);
-      else document.getElementById("status").textContent = "Impossibile caricare altri eventi. Riprova.";
-    } finally {
-      shifting = false;
-      if (shiftQueued) {
-        shiftQueued = false;
-        if (!driver && !touching && items.length) {
-          const idx = clamp(Math.round(sel.scrollLeft / SLOT));
-          if (idx <= WINDOW_EDGE) void shiftWindow(-1);
-          else if (idx >= WINDOW_DAYS - WINDOW_EDGE - 1) void shiftWindow(1);
-        }
-      }
-    }
+    let nextStart = shiftDate(windowStart, direction * WINDOW_SHIFT);
+    if (nextStart < yearStart) nextStart = yearStart;
+    const lastStart = lastWindowStart();
+    if (nextStart > lastStart) nextStart = lastStart;
+    if (nextStart.getTime() === windowStart.getTime()) return;
+
+    const selected = dateAt(clamp(Math.round(sel.scrollLeft / SLOT)));
+    windowStart = nextStart;
+    render(homeData, timetableData, selected, true);
+    document.getElementById("status").textContent = "";
+  }
+
+  function goToToday() {
+    if (!homeData) return;
+    const today = isoDate(homeData.today);
+    ensureWindowForDay(dayOffset(yearStart, today));
+    const index = clamp(dayOffset(windowStart, today));
+    goTo(index);
   }
 
   async function load() {
     const status = document.getElementById("status");
     if (!items.length) status.textContent = "Caricamento…";   // agli aggiornamenti successivi niente lampeggio
-    if (!windowStart) windowStart = shiftDate(new Date(), -INITIAL_PAST);
     loading = true;
     pendingEvents = null; pendingTimetable = null; hasPendingTimetable = false;
     const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
     try {
       const [res, ttRes] = await Promise.all([
-        api(`/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`), api("/api/timetable"),
+        api("/api/events"), api("/api/timetable"),
       ]);
       if (!res.ok) throw new Error(res.status);
       // orario non disponibile (404 o errore): la home mostra comunque gli eventi
       timetableData = hasPendingTimetable ? pendingTimetable : ttRes.ok ? await ttRes.json() : null;
       const data = pendingEvents || await res.json();
       loading = false;
-      render({ ...data, events: mergeEvents(eventData, data.events) }, timetableData, selected);
-      Calendar.load();   // non blocca la home: se fallisce il calendario resta nascosto
+      render(data, timetableData, selected);
       status.textContent = "";
     } catch (e) {
       loading = false;
@@ -458,10 +488,10 @@ const Home = (() => {
   }
 
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
-    if (detail.path === `/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`) {
+    if (detail.path === "/api/events") {
       if (loading) { pendingEvents = detail.data; return; }
       const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
-      render({ ...detail.data, events: mergeEvents(eventData, detail.data.events) }, timetableData, selected);
+      render(detail.data, timetableData, selected);
       document.getElementById("status").textContent = "";
     } else if (detail.path === "/api/timetable") {
       if (loading) { pendingTimetable = detail.data; hasPendingTimetable = true; return; }
@@ -475,7 +505,7 @@ const Home = (() => {
   });
 
   window.addEventListener("bv-api-cache-error", ({ detail }) => {
-    if (detail.path.startsWith("/api/events?") || detail.path === "/api/timetable") {
+    if (detail.path === "/api/events" || detail.path === "/api/timetable") {
       document.getElementById("status").textContent = "Dati salvati mostrati; impossibile aggiornarli dal server.";
     }
   });
@@ -485,6 +515,7 @@ const Home = (() => {
     panels = document.getElementById("panels");
     list = document.getElementById("evlist");
     toggle = document.getElementById("mode-toggle");
+    todayButton = document.getElementById("today-button");
 
     for (const [el, src] of [[sel, "sel"], [panels, "view"], [list, "view"]]) {
       el.addEventListener("scroll", () => { if (src === "sel" || el === view().el()) onScroll(src); }, { passive: true });
@@ -496,6 +527,10 @@ const Home = (() => {
     window.addEventListener("touchend", lift, { passive: true });
     window.addEventListener("touchcancel", lift, { passive: true });
     toggle.addEventListener("click", () => applyMode(mode === "orario" ? "eventi" : "orario"));
+    todayButton.addEventListener("click", () => {
+      goToToday();
+      Calendar.goToToday();
+    });
     window.addEventListener("resize", () => { if (items.length) view().snap(Math.round(sel.scrollLeft / SLOT)); });
 
     let saved = null;
@@ -504,5 +539,5 @@ const Home = (() => {
   }
 
   document.addEventListener("DOMContentLoaded", init);
-  return { load, isHomework, toggleDone };
+  return { load, isHomework, toggleDone, goToToday };
 })();

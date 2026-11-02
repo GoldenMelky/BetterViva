@@ -355,7 +355,7 @@ async function restoreOfflineHome() {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    if (!keys.some((key) => typeof key === "string" && key.startsWith(`api-cache:${scope}:/api/events?`))) {
+    if (!keys.includes(`api-cache:${scope}:/api/events`)) {
       return false;
     }
     cacheScope = scope;

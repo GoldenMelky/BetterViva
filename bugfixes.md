@@ -14,16 +14,17 @@ Backlog ricavato dalla lista originale e contestualizzato all’implementazione 
 
 - [ ] **Ora delle verifiche per i docenti di laboratorio:** correggere l’associazione tra verifica e ora visualizzata quando l’evento riguarda un docente di laboratorio. In `static/home.js` l’ora deriva dalla materia associata all’evento e dalle celle dell’orario; verificare il caso anche con la risoluzione di materia/docente in `events.py` e con i dati di laboratorio dell’orario.
 - [x] **Azione “Segna come completato” negli eventi manuali:** verificare la regola di visualizzazione dell’azione nel popup. `EventSheet.showEvent()` (`static/sheet.js`) la mostra solo per compiti senza tipo e con `manual` falso; chiarire se `manual: true` debba invece consentirla e controllare che il salvataggio continui a usare l’endpoint di completamento.
-- [ ] **Eventi molto passati o molto futuri:** fare in modo che siano reperibili anche eventi fuori dalla finestra iniziale caricata. `Home` usa una finestra mobile di 42 giorni e la sposta a blocchi; verificare i limiti e il recupero dei dati in `static/home.js`, insieme ai parametri temporali dell’API in `events.py`/`main.py`.
-- [ ] **Ritorno indietro dopo essersi spostati molto avanti negli eventi:** correggere la navigazione della lista quando l’utente ha raggiunto date lontane. Verificare caricamento delle finestre precedenti, aggiornamento di `windowStart` e mantenimento della data selezionata in `shiftWindow()` e `render()` (`static/home.js`).
+- [x] **Eventi molto passati o molto futuri:** l'API carica una volta gli eventi dell'intero anno scolastico e la home scorre le finestre locali sui dati annuali (`main.py`, `static/home.js`).
+- [x] **Ritorno indietro dopo essersi spostati molto avanti negli eventi:** le finestre precedenti e successive vengono ricostruite dai dati annuali già caricati, mantenendo la data selezionata (`static/home.js`).
 - [x] **Testi lunghi nella vista orario:** evitare che i testi compatti mostrino una terza riga parziale; il clamp a due righe non ha più padding verticale che lasci intravedere contenuto extra (`.panel .ev-row-compact .ev` in `static/style.css`).
 - [x] **Autore nei popup degli eventi:** mostrare il nome dell’autore in ogni popup di dettaglio pertinente, non solo quando è presente come `teacher`. Il dato viene normalizzato in `events.py` e visualizzato condizionalmente in `EventSheet.showEvent()` (`static/sheet.js`); verificare anche i popup aperti dal calendario.
 
 ## Calendario
 
-- [ ] **Settimana corrente in cima:** aprendo il calendario, posizionare la settimana corrente all’inizio della porzione visibile, senza perdere la navigazione verso le altre settimane.
-- [ ] **Scorrimento verticale dei mesi:** consentire di attraversare i mesi in entrambe le direzioni e caricare i mesi adiacenti mantenendo stabile la posizione di lettura. Il caricamento progressivo e la conservazione dello scroll sono gestiti da `static/calendar.js`; verificare anche il contenitore `#cal-scroll` in `static/index.html` e `static/style.css`.
-- [ ] **Pulsante “Oggi”:** rendere sempre possibile tornare rapidamente alla settimana corrente dal calendario. Verificare che `#cal-today` richiami il posizionamento corretto anche dopo aver caricato altri mesi (`static/calendar.js`).
+- [x] **Mese corrente visibile:** al primo caricamento il calendario si posiziona sul mese corrente e consente di scorrere gli altri mesi in orizzontale (`static/calendar.js`).
+- [x] **Scorrimento orizzontale dei mesi:** tutti i mesi dell'anno scolastico sono navigabili in orizzontale nel contenitore `#cal-scroll` (`static/calendar.js`, `static/index.html`, `static/style.css`).
+- [x] **Pulsante “Oggi”:** il pulsante nella barra iniziale riporta alla data corrente nella vista orario, nella lista eventi e nel mese del calendario (`static/home.js`, `static/calendar.js`).
+- [x] **Eventi oltre la finestra iniziale:** la lista eventi contiene tutti gli eventi annuali; quando si scorre verso date esterne alla finestra, la selezione dei giorni segue la data senza richiedere clic manuali (`static/home.js`).
 
 ## Voti
 
