@@ -341,8 +341,7 @@ button:disabled { opacity: .6; cursor: default; }
 button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(--text); background: var(--red); border: 0; border-radius: 587px; cursor: pointer; }
 
 /* Voti */
-#view-grades { padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
-#grades-body { min-height: 55vh; }
+#view-grades { min-height: 55vh; padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
 .grade-period-nav { display: flex; align-items: center; gap: 8px; margin: 1px -22px 44px; }
 .grade-period-tabs {
   display: flex; flex: 1; align-items: center; gap: 24px; min-width: 0;

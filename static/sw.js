@@ -4,14 +4,14 @@
    - Il guscio dell'app viene servito subito dalla cache; la rete aggiorna la copia
      per l'apertura successiva.
    - /api/* non passa mai di qui: i dati personali sono gestiti in IndexedDB per account. */
-const CACHE = "betterviva-v2";
+const CACHE = "betterviva-v3";
 const SHELL = [
   "/",
-  "/static/style.css", "/static/home.js", "/static/grades.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/app.js",
-  "/static/manifest.webmanifest",
-  "/static/fonts/inter-latin-400-normal.woff2", "/static/fonts/figtree-latin-400-normal.woff2",
-  "/static/fonts/dongle-latin-400-normal.woff2",
-  "/static/icons/icon-192.png", "/static/icons/icon-512.png",
+  "/static/build/assets/index.css", "/static/build/assets/app.js",
+  "/static/build/assets/manifest.webmanifest", "/static/build/assets/icon-192.png",
+  "/static/build/assets/apple-touch-icon.png", "/static/build/assets/figtree-latin-400-normal.woff2",
+  "/static/sheet.js", "/static/home.js", "/static/settings.js", "/static/app.js",
+  "/static/icons/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {

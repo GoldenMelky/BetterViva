@@ -279,19 +279,9 @@ window.addEventListener("offline", () => {
 window.addEventListener("online", renderSyncStatus);
 
 function show(view) {
-  $("view-login").hidden = view !== "login";
-  $("view-setup").hidden = view !== "setup";
-  $("view-settings").hidden = view !== "settings";
-  $("view-home").hidden = view !== "home";
-  $("view-grades").hidden = view !== "grades";
-  $("avatar").hidden = view !== "home" && view !== "grades" && view !== "setup" && view !== "settings";
-  $("settings-button").hidden = view !== "home";
-  $("back-button").hidden = view === "home" || view === "login";
-  $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "settings" && view !== "setup";
-  $("app-menu").hidden = true;
-  $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
   currentView = view;
+  window.dispatchEvent(new CustomEvent("bv-view-change", { detail: view }));
   if (!appHistoryInitialized) {
     history.replaceState({ bvApp: true, view }, "");
     appHistoryInitialized = true;
@@ -301,6 +291,15 @@ function show(view) {
 function navigateTo(view) {
   if (currentView !== view) history.pushState({ bvApp: true, view }, "");
   show(view);
+}
+
+function notifySettingsOpen(onBack) {
+  window.dispatchEvent(new CustomEvent("bv-open-settings", { detail: { onBack } }));
+}
+
+function openSettings(onBack) {
+  navigateTo("settings");
+  notifySettingsOpen(onBack);
 }
 
 function replaceView(view) {
@@ -337,8 +336,7 @@ async function enter(profileResponse = null) {
     }
   }
   if (me && me.setup_needed) {
-    replaceView("setup");
-    Setup.start(me.first_name || titleCase((me.name || "").split(" ")[0]), showHome);
+    window.BetterViva.startSetup(me.first_name || titleCase((me.name || "").split(" ")[0]), showHome);
   } else {
     showHome(!!me?.color_setup_pending);
   }
@@ -368,15 +366,13 @@ async function restoreOfflineHome() {
 }
 
 function showLogin(message = "") {
-  const err = $("login-error");
-  err.textContent = message;
-  err.hidden = !message;
+  window.dispatchEvent(new CustomEvent("bv-login-error", { detail: message }));
   replaceView("login");
 }
 
 function appBack() {
   if (Sheet.handleBack()) return;
-  if (currentView === "setup" && Setup.back()) return;
+  if (currentView === "setup" && window.BetterVivaSetup?.back()) return;
   if (currentView === "settings") return showHome();
   if (currentView === "home") return history.back();
   if (history.state?.bvApp) history.back();
@@ -385,19 +381,23 @@ function appBack() {
 
 function restoreView(view) {
   if (view === "home") showHome();
-  else if (view === "grades") Grades.open();
-  else if (view === "settings") Settings.open(appBack);
+  else if (view === "grades") show("grades");
+  else if (view === "settings") { show("settings"); notifySettingsOpen(appBack); }
   else if (view === "setup") show("setup");
   else showLogin();
 }
 
 window.addEventListener("popstate", (event) => {
   if (Sheet.handleBack()) return;
-  if (currentView === "setup" && Setup.back()) {
+  if (currentView === "setup" && window.BetterVivaSetup?.back()) {
     history.pushState({ bvApp: true, view: "setup" }, "");
     return;
   }
-  if (currentView === "grades" && Grades.handleBack()) return;
+  if (currentView === "grades") {
+    const gradeBack = new CustomEvent("bv-grade-back", { detail: { handled: false } });
+    window.dispatchEvent(gradeBack);
+    if (gradeBack.detail.handled) return;
+  }
   const view = event.state?.bvApp ? event.state.view : null;
   if (currentView === "settings" && view === "grades") return showHome();
   if (view) return restoreView(view);
@@ -417,21 +417,56 @@ window.addEventListener("bv-api-cache-error", ({ detail }) => {
 async function logout() {
   await requestWithStatus(() => fetch("/api/logout", { method: "POST" })).catch(() => {});
   await dbClear();
-  $("password").value = "";
+  window.dispatchEvent(new CustomEvent("bv-clear-login-password"));
   showLogin();
 }
 
-$("login-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const btn = $("login-btn");
-  btn.disabled = true;
-  btn.textContent = "Accesso in corso…";
-  $("login-error").hidden = true;
-  try {
-    const username = $("username").value.trim();
-    const password = $("password").value;
+window.BetterViva = {
+  api,
+  isLoginError: (error) => error instanceof LoginError,
+  showLogin,
+  goBack: appBack,
+  goHome: () => showHome(),
+  goGrades() {
+    navigateTo("grades");
+  },
+  goSettings: () => openSettings(appBack),
+  logout() {
+    if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) {
+      void logout();
+    }
+  },
+  showEventDay(day, events) {
+    EventSheet.showDay(day, events);
+  },
+  openGrade(grade) {
+    const el = (tag, cls, text) => {
+      const node = document.createElement(tag);
+      if (cls) node.className = cls;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const value = Number(grade.decimalValue);
+    const color = grade.canceled || grade.noAverage || grade.decimalValue == null || !Number.isFinite(value)
+      ? "blue"
+      : value >= 6 ? "green" : value >= 5 ? "orange" : "red";
+    const date = typeof grade.evtDate === "string"
+      ? grade.evtDate.split("-").reverse().join("/")
+      : "";
+    const fallbackTitle = [date, grade.componentDesc].filter(Boolean).join(" - ");
+    const details = el("div", "grade-sheet-details");
+    details.append(el("h2", "sheet-title", grade.subjectName || grade.subjectDesc || "Voto"));
+    if (fallbackTitle) details.append(el("p", "sheet-meta", fallbackTitle));
+    const heading = el("div", "grade-sheet-heading");
+    heading.append(el("span", `grade-value ${color}`, grade.displayValue || "—"), details);
+    const nodes = [heading];
+    if (grade.notesForFamily) nodes.push(el("p", "sheet-text", grade.notesForFamily));
+    if (grade.teacherName) nodes.push(el("p", "sheet-meta", grade.teacherName));
+    Sheet.open(...nodes);
+  },
+  async login(username, password, remember) {
     await postLogin(username, password);
-    if ($("remember").checked) await saveCredentials(username, password);
+    if (remember) await saveCredentials(username, password);
     else await dbClear();
     const previousScope = await dbGet("api-cache-scope");
     if (previousScope) {
@@ -439,47 +474,22 @@ $("login-form").addEventListener("submit", async (e) => {
       await dbDelete("api-cache-scope");
     }
     cacheScope = null;
-    $("password").value = "";
     await enter();
-  } catch (err) {
-    showLogin(err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Accedi";
-  }
-});
-
-$("avatar").addEventListener("click", () => {
-  if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) logout();
-});
-
-$("back-button").addEventListener("click", appBack);
-$("settings-button").addEventListener("click", () => {
-  navigateTo("settings");
-  Settings.open(appBack);
-});
-$("menu-button").addEventListener("click", () => {
-  const menu = $("app-menu");
-  menu.hidden = !menu.hidden;
-  $("menu-button").setAttribute("aria-expanded", String(!menu.hidden));
-});
-$("menu-home").addEventListener("click", () => showHome());
-$("menu-grades").addEventListener("click", () => {
-  navigateTo("grades");
-  Grades.open();
-});
-$("menu-settings").addEventListener("click", () => {
-  navigateTo("settings");
-  Settings.open(appBack);
-});
-
-// WebCrypto esiste solo su HTTPS o localhost: altrimenti niente salvataggio delle credenziali
-if (!window.crypto?.subtle) {
-  $("remember").checked = false;
-  $("remember").disabled = true;
-  document.querySelector(".hint").textContent =
-    "Connessione non sicura (HTTP): le credenziali non possono essere salvate e dovrai accedere ogni volta. Apri il sito in HTTPS per attivare il salvataggio.";
-}
+  },
+  openSettings,
+  openSetup(mode, onDone) {
+    navigateTo("setup");
+    window.dispatchEvent(new CustomEvent("bv-open-setup", {
+      detail: { mode, firstName: "", onDone },
+    }));
+  },
+  startSetup(firstName, onDone) {
+    replaceView("setup");
+    window.dispatchEvent(new CustomEvent("bv-open-setup", {
+      detail: { mode: "initial", firstName, onDone },
+    }));
+  },
+};
 
 /* ---------- Avvio ---------- */
 (async function init() {

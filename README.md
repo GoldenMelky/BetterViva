@@ -22,9 +22,21 @@ Giustamente per ottenere i dati del tuo account ClasseViva, servono le credenzia
 
 Le credenziali possono essere salvate cifrate nel browser e vengono mandate al backend ogni volta che il token scade.
 
-Eventi, orario, calendario e configurazione vengono conservati in IndexedDB per account e mostrati subito alle aperture successive; l'app li aggiorna in background quando il server è raggiungibile. Il logout elimina i dati personali memorizzati localmente. Anche HTML, JavaScript, CSS e gli altri asset statici vengono serviti dalla cache mentre si aggiornano in background.
+Eventi, orario e configurazione vengono conservati in IndexedDB per account e mostrati subito alle aperture successive; l'app li aggiorna in background quando il server è raggiungibile. Il calendario usa lo stesso flusso eventi della home e mostra solo quelli classificati come prove. Il logout elimina i dati personali memorizzati localmente. Anche HTML, JavaScript, CSS e gli altri asset statici vengono serviti dalla cache mentre si aggiornano in background.
 
 Sul server vengono salvate la configurazione dell'orario e le preferenze delle materie (nome, laboratorio e colore); la cache locale include anche i dati necessari a mostrare eventi e calendario senza attesa.
+
+## Sviluppo e build
+
+L'interfaccia usa Vue 3 e Vite; FastAPI serve il bundle generato e continua a gestire API e file statici. Accesso, impostazioni, voti, calendario e configurazione dell'orario sono componenti Vue; la home è ancora in migrazione dal controller legacy.
+
+```sh
+npm ci
+npm run build
+python -m uvicorn main:app --reload
+```
+
+Per lo sviluppo con aggiornamento automatico, avvia `python -m uvicorn main:app --reload` e `npm run dev` in due terminali. Vite inoltra API, asset statici e service worker al backend locale.
 
 ## Analittica
 

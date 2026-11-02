@@ -33,6 +33,15 @@ const Home = (() => {
   const shiftDate = (d, days) => { const out = new Date(d); out.setDate(out.getDate() + days); return out; };
   const dayOffset = (from, to) => Math.round((Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) / 864e5);
   const dateAt = (index) => shiftDate(windowStart, index);
+  const eventPath = (start, count, includeCalendar = false) => {
+    let first = start, last = shiftDate(start, count - 1);
+    if (includeCalendar) {
+      const month = window.BetterVivaCalendar.monthRange();
+      if (month.start < first) first = month.start;
+      if (month.end > last) last = month.end;
+    }
+    return `/api/events?start=${key(first)}&days=${dayOffset(first, last)}`;
+  };
 
   /* ---- le due viste: come leggere/impostare la posizione ----
      p = giorno del selettore (anche frazionario). Nella vista eventi i giorni senza eventi non hanno
@@ -402,7 +411,7 @@ const Home = (() => {
     const nextStart = shiftDate(windowStart, direction * WINDOW_SHIFT);
     const fetchStart = direction < 0 ? nextStart : shiftDate(currentEnd, 1);
     try {
-      const res = await api(`/api/events?start=${key(fetchStart)}&days=${WINDOW_SHIFT - 1}`);
+      const res = await api(eventPath(fetchStart, WINDOW_SHIFT));
       if (!res.ok) throw new Error(res.status);
       const chunk = await res.json();
       if (driver || touching) {
@@ -438,17 +447,19 @@ const Home = (() => {
     loading = true;
     pendingEvents = null; pendingTimetable = null; hasPendingTimetable = false;
     const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
+    const eventsPath = eventPath(windowStart, WINDOW_DAYS, true);
     try {
       const [res, ttRes] = await Promise.all([
-        api(`/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`), api("/api/timetable"),
+        api(eventsPath), api("/api/timetable"),
       ]);
       if (!res.ok) throw new Error(res.status);
       // orario non disponibile (404 o errore): la home mostra comunque gli eventi
       timetableData = hasPendingTimetable ? pendingTimetable : ttRes.ok ? await ttRes.json() : null;
       const data = pendingEvents || await res.json();
       loading = false;
-      render({ ...data, events: mergeEvents(eventData, data.events) }, timetableData, selected);
-      Calendar.load();   // non blocca la home: se fallisce il calendario resta nascosto
+      const merged = { ...data, events: mergeEvents(eventData, data.events) };
+      render(merged, timetableData, selected);
+      window.dispatchEvent(new CustomEvent("bv-events-loaded", { detail: merged }));
       status.textContent = "";
     } catch (e) {
       loading = false;
@@ -458,10 +469,12 @@ const Home = (() => {
   }
 
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
-    if (detail.path === `/api/events?start=${key(windowStart)}&days=${WINDOW_DAYS - 1}`) {
+    if (detail.path === eventPath(windowStart, WINDOW_DAYS, true)) {
       if (loading) { pendingEvents = detail.data; return; }
       const selected = items.length ? dateAt(clamp(Math.round(sel.scrollLeft / SLOT))) : null;
-      render({ ...detail.data, events: mergeEvents(eventData, detail.data.events) }, timetableData, selected);
+      const merged = { ...detail.data, events: mergeEvents(eventData, detail.data.events) };
+      render(merged, timetableData, selected);
+      window.dispatchEvent(new CustomEvent("bv-events-loaded", { detail: merged }));
       document.getElementById("status").textContent = "";
     } else if (detail.path === "/api/timetable") {
       if (loading) { pendingTimetable = detail.data; hasPendingTimetable = true; return; }
@@ -503,6 +516,7 @@ const Home = (() => {
     applyMode(saved === "eventi" ? "eventi" : "orario", false);
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
   return { load, isHomework, toggleDone };
 })();

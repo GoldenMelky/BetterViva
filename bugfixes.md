@@ -22,10 +22,10 @@ Backlog ricavato dalla lista originale e contestualizzato all’implementazione 
 ## Calendario
 
 - [ ] **Settimana corrente in cima:** aprendo il calendario, posizionare la settimana corrente all’inizio della porzione visibile, senza perdere la navigazione verso le altre settimane.
-- [ ] **Scorrimento verticale dei mesi:** consentire di attraversare i mesi in entrambe le direzioni e caricare i mesi adiacenti mantenendo stabile la posizione di lettura. Il caricamento progressivo e la conservazione dello scroll sono gestiti da `static/calendar.js`; verificare anche il contenitore `#cal-scroll` in `static/index.html` e `static/style.css`.
-- [ ] **Pulsante “Oggi”:** rendere sempre possibile tornare rapidamente alla settimana corrente dal calendario. Verificare che `#cal-today` richiami il posizionamento corretto anche dopo aver caricato altri mesi (`static/calendar.js`).
+- [ ] **Scorrimento verticale dei mesi:** consentire di attraversare i mesi in entrambe le direzioni e caricare i mesi adiacenti mantenendo stabile la posizione di lettura. La griglia è in `src/components/CalendarView.vue`; verificare anche il contenitore in `src/components/HomeView.vue` e `static/style.css`.
+- [ ] **Pulsante “Oggi”:** rendere sempre possibile tornare rapidamente alla settimana corrente dal calendario. Verificare la navigazione fra i mesi in `src/components/CalendarView.vue`.
 
 ## Voti
 
 - [ ] **Un solo periodo:** se l’API restituisce un solo periodo, mostrare soltanto “Tutto l’anno”, senza la scheda del singolo periodo. La costruzione delle schede è in `renderTabs()` e i dati dei periodi arrivano da `grades.py`; verificare anche il ripristino della selezione dopo un aggiornamento.
-- [ ] **Elenco materie scorrevole:** consentire di scorrere l’elenco delle materie nella schermata dei voti senza bloccare il resto della pagina. L’elenco è `.grade-subject-list` in `static/grades.js`; verificare altezza e overflow in `static/style.css` su schermi piccoli e grandi.
+- [ ] **Elenco materie scorrevole:** consentire di scorrere l’elenco delle materie nella schermata dei voti senza bloccare il resto della pagina. L’elenco è `.grade-subject-list` in `src/components/GradesView.vue`; verificare altezza e overflow in `static/style.css` su schermi piccoli e grandi.
