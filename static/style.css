@@ -139,14 +139,18 @@ h1 { margin: 10px 0 20px; font-size: 1.6rem; font-weight: 400; text-align: cente
 
 /* Calendario: verifiche e interrogazioni */
 .cal { margin-top: 24px; }
-.cal h2 { margin: 0 0 14px; font-size: 20px; line-height: 21px; font-weight: 400; text-align: center; }
+.cal h2 { margin: 0 0 24px; font-size: 20px; line-height: 21px; font-weight: 400; text-align: center; }
+.cal-month-nav { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cal-month-nav h3 { margin: 0; font-size: 17px; line-height: 22px; font-weight: 500; text-align: center; text-transform: capitalize; }
+.cal-month-arrow { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; color: var(--text); background: var(--card); cursor: pointer; }
+.cal-month-arrow svg { width: 20px; height: 20px; }
+.cal-month-arrow:disabled { opacity: .35; cursor: default; }
 .cal-week { display: grid; grid-template-columns: repeat(7, 1fr); }
 .cal-week span { padding-bottom: 6px; font-size: 17px; text-align: center; border-bottom: 1px solid var(--line); }
 .cal-scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; scroll-snap-type: x mandatory; }
 .cal-scroll::-webkit-scrollbar { display: none; }
 #cal-months { display: flex; align-items: stretch; }
 .cal-month { flex: 0 0 100%; min-width: 0; padding: 10px 0 16px; scroll-snap-align: start; scroll-snap-stop: always; }
-.cal-month h3 { margin: 0 0 5px; font-size: 16px; font-weight: 500; text-align: center; text-transform: capitalize; }
 .cal-grid { display: flex; flex-direction: column; }
 .cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .cd-empty { min-height: 50px; border-bottom: 1px solid var(--line); }

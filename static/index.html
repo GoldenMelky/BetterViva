@@ -91,6 +91,15 @@
       <!-- Calendario annuale: usa gli stessi eventi della home -->
       <section id="cal" class="cal" aria-labelledby="cal-title" hidden>
         <h2 id="cal-title">Verifiche e interrogazioni</h2>
+        <div class="cal-month-nav" aria-label="Navigazione mesi">
+          <button id="cal-prev" class="cal-month-arrow" type="button" aria-label="Mese precedente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <h3 id="cal-month-title" aria-live="polite"></h3>
+          <button id="cal-next" class="cal-month-arrow" type="button" aria-label="Mese successivo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
         <div class="cal-week" aria-hidden="true">
           <span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span>
         </div>

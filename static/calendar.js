@@ -9,7 +9,8 @@ const Calendar = (() => {
     interrogazione: SVG('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/>'),
   };
   const NAME = { verifica: "Verifica", interrogazione: "Interrogazione" };
-  let scroll, months, positionedYear = null, renderedData = null;
+  let scroll, months, monthTitle, previousButton, nextButton;
+  let positionedYear = null, renderedData = null, activeMonth = 0, monthCount = 0;
 
   const isoDate = (value) => {
     const [year, month, day] = value.split("-").map(Number);
@@ -21,15 +22,38 @@ const Calendar = (() => {
     if (!scroll || !renderedData) return;
     const first = isoDate(renderedData.start), today = isoDate(renderedData.today);
     const monthIndex = (today.getFullYear() - first.getFullYear()) * 12 + today.getMonth() - first.getMonth();
-    const left = monthIndex * scroll.clientWidth;
+    goToMonth(monthIndex, smooth);
+  }
+
+  function goToMonth(index, smooth = true) {
+    activeMonth = Math.max(0, Math.min(monthCount - 1, index));
+    const left = activeMonth * scroll.clientWidth;
     if (smooth) scroll.scrollTo({ left, behavior: "smooth" });
     else scroll.scrollLeft = left;
+    updateMonthNav();
+  }
+
+  function updateMonthNav() {
+    if (!scroll || !renderedData || !monthCount) return;
+    activeMonth = Math.max(0, Math.min(monthCount - 1, Math.round(scroll.scrollLeft / (scroll.clientWidth || 1))));
+    const first = isoDate(renderedData.start);
+    const month = new Date(first.getFullYear(), first.getMonth() + activeMonth, 1);
+    monthTitle.textContent = `${MONTHS[month.getMonth()]} ${month.getFullYear()}`;
+    previousButton.disabled = activeMonth === 0;
+    nextButton.disabled = activeMonth === monthCount - 1;
   }
 
   function render(data) {
     if (!scroll) {
       scroll = document.getElementById("cal-scroll");
       months = document.getElementById("cal-months");
+      monthTitle = document.getElementById("cal-month-title");
+      previousButton = document.getElementById("cal-prev");
+      nextButton = document.getElementById("cal-next");
+      scroll.addEventListener("scroll", updateMonthNav, { passive: true });
+      previousButton.addEventListener("click", () => goToMonth(activeMonth - 1));
+      nextButton.addEventListener("click", () => goToMonth(activeMonth + 1));
+      window.addEventListener("resize", () => goToMonth(activeMonth, false));
     }
     if (data === renderedData) return;
 
@@ -41,17 +65,15 @@ const Calendar = (() => {
 
     const first = isoDate(data.start), last = isoDate(data.end), today = data.today;
     const yearChanged = positionedYear !== data.start;
-    const previousMonth = yearChanged ? null : Math.round(scroll.scrollLeft / (scroll.clientWidth || 1));
+    const previousMonth = yearChanged ? null : activeMonth;
     months.replaceChildren();
+    monthCount = 0;
 
     for (let month = new Date(first.getFullYear(), first.getMonth(), 1);
       month <= last;
       month = new Date(month.getFullYear(), month.getMonth() + 1, 1)) {
       const monthSection = document.createElement("section");
       monthSection.className = "cal-month";
-      const heading = document.createElement("h3");
-      heading.textContent = `${MONTHS[month.getMonth()]} ${month.getFullYear()}`;
-      monthSection.append(heading);
 
       const grid = document.createElement("div");
       grid.className = "cal-grid";
@@ -99,15 +121,17 @@ const Calendar = (() => {
       }
       monthSection.append(grid);
       months.append(monthSection);
+      monthCount++;
     }
 
     document.getElementById("cal").hidden = false;
     renderedData = data;
+    updateMonthNav();
     if (yearChanged) {
       positionedYear = data.start;
       requestAnimationFrame(() => goToToday(false));
     } else if (previousMonth !== null) {
-      requestAnimationFrame(() => { scroll.scrollLeft = previousMonth * scroll.clientWidth; });
+      requestAnimationFrame(() => goToMonth(previousMonth, false));
     }
   }
 
