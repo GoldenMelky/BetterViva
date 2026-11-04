@@ -4,9 +4,10 @@
    - Il guscio dell'app viene servito subito dalla cache, anche offline.
    - All'avvio gli asset vengono confrontati con la rete; se cambiano, la pagina si ricarica.
    - /api/* non passa mai di qui: i dati personali sono gestiti in IndexedDB per account. */
-const CACHE = "betterviva-v6";
+const CACHE = "betterviva-v7";
 const SHELL = [
   "/",
+  "/static/index.html", "/static/concept.css", "/static/concept-bootstrap.js", "/static/concept-app.js",
   "/static/style.css", "/static/home.js", "/static/grades.js", "/static/noticeboard.js", "/static/calendar.js", "/static/sheet.js", "/static/setup.js", "/static/settings.js", "/static/notifications.js", "/static/app.js", "/static/pwa.js",
   "/static/manifest.webmanifest",
   "/static/fonts/figtree-latin-400-normal.woff2",
@@ -88,6 +89,16 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith((async () => {
     const cached = await caches.match(req, { ignoreSearch: true });
+    if (url.pathname === "/" || url.pathname.endsWith(".html")) {
+      try {
+        const response = await fetch(new Request(req, { cache: "no-cache" }));
+        if (response.ok) await (await caches.open(CACHE)).put(req, response.clone());
+        return response;
+      } catch (error) {
+        if (cached) return cached;
+        throw error;
+      }
+    }
     if (cached) return cached;
     const response = await fetch(req);
     if (response.ok) await (await caches.open(CACHE)).put(req, response.clone());

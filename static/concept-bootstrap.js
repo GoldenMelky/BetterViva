@@ -28,6 +28,7 @@
   app.querySelector("#sub").id = "sync-status";
 
   const homeView = createView("view-home", "Home");
+  homeView.className = "concept-home";
   homeView.hidden = false;
   views.replaceWith(homeView);
   homeView.append(views);
