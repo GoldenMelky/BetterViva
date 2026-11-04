@@ -11,6 +11,7 @@ const Calendar = (() => {
   const NAME = { verifica: "Verifica", interrogazione: "Interrogazione" };
   let scroll, months, monthTitle, previousButton, nextButton;
   let positionedYear = null, renderedData = null, activeMonth = 0, monthCount = 0;
+  const calendarRoot = () => document.getElementById("cal-native") || document.getElementById("cal");
 
   const isoDate = (value) => {
     const [year, month, day] = value.split("-").map(Number);
@@ -124,7 +125,7 @@ const Calendar = (() => {
       monthCount++;
     }
 
-    document.getElementById("cal").hidden = false;
+    calendarRoot().hidden = false;
     renderedData = data;
     updateMonthNav();
     if (yearChanged) {

@@ -8,6 +8,7 @@ const Notifications = (() => {
   const states = new Map();
   const queues = new Map();
   let generation = 0;
+  let conceptSheetOpen = false;
 
   const element = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -251,6 +252,21 @@ const Notifications = (() => {
     return ({ event: "Agenda", grade: "Voti", notice: "Bacheca" })[type] || "Novità";
   }
 
+  function isDialogOpen() {
+    return document.documentElement.hasAttribute("data-bv-concept")
+      ? conceptSheetOpen
+      : $("notifications-dialog").open;
+  }
+
+  function renderConceptSheet(state, error = "") {
+    const list = $("notifications-list");
+    const clear = $("notifications-clear");
+    renderDialog(state, error);
+    clear.className = "primary";
+    clear.textContent = "Pulisci tutte le novità";
+    Sheet.open(element("h3", "sheet-title", "Novità"), list, clear);
+  }
+
   function renderDialog(state, error = "") {
     const list = $("notifications-list");
     if (!list) return;
@@ -281,8 +297,14 @@ const Notifications = (() => {
           if (item.description) button.append(element("span", "notification-description", item.description));
           button.addEventListener("click", async () => {
             await markItemRead(item.id);
-            $("notifications-dialog").close();
-            window.dispatchEvent(new CustomEvent("bv-notification-open", { detail: item.target }));
+            if (document.documentElement.hasAttribute("data-bv-concept")) {
+              const openTarget = () => window.dispatchEvent(new CustomEvent("bv-notification-open", { detail: item.target }));
+              if (Sheet.close()) window.addEventListener("bv-sheet-close", openTarget, { once: true });
+              else openTarget();
+            } else {
+              $("notifications-dialog").close();
+              window.dispatchEvent(new CustomEvent("bv-notification-open", { detail: item.target }));
+            }
           });
           group.append(button);
         }
@@ -302,7 +324,7 @@ const Notifications = (() => {
       await dbSet(stateKey(scope), state);
       if (scope !== cacheScope) return;
       updateBadge(state);
-      if ($("notifications-dialog").open) renderDialog(state);
+      if (isDialogOpen()) renderDialog(state);
     } catch (error) {
       console.error("Impossibile segnare la notifica come letta.", error);
       $("notifications-list")?.append(element("p", "notifications-error",
@@ -319,7 +341,7 @@ const Notifications = (() => {
       await dbSet(stateKey(scope), current);
       if (scope !== cacheScope) return;
       updateBadge(current);
-      if ($("notifications-dialog").open) renderDialog(current);
+      if (isDialogOpen()) renderDialog(current);
       if (!$("view-debug")?.hidden) await refreshDebugPanel();
     } catch (error) {
       console.error("Impossibile pulire le notifiche.", error);
@@ -349,19 +371,24 @@ const Notifications = (() => {
     const scope = cacheScope;
     const currentGeneration = generation;
     if (!scope) return;
-    dialog.showModal();
+    const isConcept = document.documentElement.hasAttribute("data-bv-concept");
+    conceptSheetOpen = isConcept;
+    if (!isConcept) dialog.showModal();
     try {
       const state = cleanState(await getState(scope));
       if (currentGeneration !== generation || scope !== cacheScope) {
-        dialog.close();
+        if (isConcept) Sheet.close();
+        else dialog.close();
         return;
       }
       await dbSet(stateKey(scope), state);
       updateBadge(state);
-      renderDialog(state);
+      if (isConcept) renderConceptSheet(state);
+      else renderDialog(state);
     } catch (error) {
       console.error("Impossibile aprire le notifiche locali.", error);
-      renderDialog({ items: [] }, error);
+      if (isConcept) renderConceptSheet({ items: [] }, error);
+      else renderDialog({ items: [] }, error);
     }
   }
 
@@ -445,7 +472,7 @@ const Notifications = (() => {
       await dbSet(stateKey(scope), state);
       if (scope !== cacheScope) return;
       updateBadge(state);
-      if ($("notifications-dialog").open) renderDialog(state);
+      if (isDialogOpen()) renderDialog(state);
       await refreshDebugPanel();
       debugStatus("Notifica aggiunta.");
     } catch (error) {
@@ -485,7 +512,7 @@ const Notifications = (() => {
       await dbSet(stateKey(scope), state);
       if (scope !== cacheScope) return;
       updateBadge(state);
-      if ($("notifications-dialog").open) renderDialog(state);
+      if (isDialogOpen()) renderDialog(state);
     } catch (error) {
       console.error("Impossibile rimuovere le notifiche scadute.", error);
     }
@@ -497,6 +524,8 @@ const Notifications = (() => {
     queues.clear();
     updateBadge(null);
   }
+
+  window.addEventListener("bv-sheet-close", () => { conceptSheetOpen = false; });
 
   async function processUpdate(scope, detail, currentGeneration) {
     const next = snapshotFor(detail.path, detail.data);
@@ -515,7 +544,7 @@ const Notifications = (() => {
     if (currentGeneration !== generation || scope !== cacheScope) return;
     await dbSet(stateKey(scope), state);
     updateBadge(state);
-    if ($("notifications-dialog").open) renderDialog(state);
+    if (isDialogOpen()) renderDialog(state);
   }
 
   window.addEventListener("bv-api-cache-update", ({ detail }) => {

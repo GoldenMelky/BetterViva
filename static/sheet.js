@@ -4,10 +4,50 @@
    - showDay: i giorni del calendario, con la lista delle prove e "Non è una verifica?";
    - showEvent: un evento della home, per leggerlo per intero e segnarlo come prova (o toglierlo). */
 const Sheet = (() => {
-  let backdrop, sheet, body, hideTimer = null, historyEntry = false, closing = false;
+  let backdrop, sheet, body, appRoot, concept = false;
+  let hideTimer = null, historyEntry = false, closing = false;
+
+  function isOpen() {
+    return concept ? appRoot.classList.contains("sheet-open") : Boolean(backdrop && !backdrop.hidden);
+  }
 
   function build() {
     if (backdrop) return;
+    appRoot = document.querySelector(".app[data-concept-shell]");
+    if (appRoot) {
+      concept = true;
+      backdrop = appRoot.querySelector("#scrim");
+      sheet = appRoot.querySelector("#sheet");
+      body = appRoot.querySelector("#sheetBody");
+      sheet.tabIndex = -1;
+      const handle = sheet.querySelector(".grab");
+      backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && isOpen()) close();
+      });
+
+      let startY = null;
+      handle.addEventListener("pointerdown", (event) => {
+        startY = event.clientY;
+        handle.setPointerCapture(event.pointerId);
+        sheet.style.transition = "none";
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (startY !== null) sheet.style.transform = `translateY(${Math.max(0, event.clientY - startY)}px)`;
+      });
+      const end = (event) => {
+        if (startY === null) return;
+        const distance = event.clientY - startY;
+        startY = null;
+        sheet.style.transition = "";
+        sheet.style.transform = "";
+        if (distance > 80) close();
+      };
+      handle.addEventListener("pointerup", end);
+      handle.addEventListener("pointercancel", end);
+      return;
+    }
+
     backdrop = document.createElement("div");
     backdrop.className = "sheet-backdrop"; backdrop.hidden = true;
     sheet = document.createElement("div");
@@ -39,21 +79,36 @@ const Sheet = (() => {
   function open(...nodes) {
     build();
     clearTimeout(hideTimer);
-    if (backdrop.hidden) {
+    if (!isOpen()) {
       history.pushState({ ...(history.state || {}), bvSheet: true }, "");
       historyEntry = true;
       closing = false;
     }
     body.replaceChildren(...nodes);
-    backdrop.hidden = false;
-    document.body.classList.add("sheet-open");
-    requestAnimationFrame(() => { backdrop.classList.add("open"); sheet.focus({ preventScroll: true }); });
+    if (concept) {
+      const title = body.querySelector("h1, h2, h3");
+      if (title && !title.id) title.id = "sheetTitle";
+    }
+    if (concept) {
+      appRoot.classList.add("sheet-open");
+    } else {
+      backdrop.hidden = false;
+      document.body.classList.add("sheet-open");
+      requestAnimationFrame(() => backdrop.classList.add("open"));
+    }
+    requestAnimationFrame(() => sheet.focus({ preventScroll: true }));
   }
 
-  function update(...nodes) { body.replaceChildren(...nodes); }
+  function update(...nodes) {
+    body.replaceChildren(...nodes);
+    if (concept) {
+      const title = body.querySelector("h1, h2, h3");
+      if (title && !title.id) title.id = "sheetTitle";
+    }
+  }
 
   function close(fromHistory = false) {
-    if (!backdrop || backdrop.hidden) return false;
+    if (!backdrop || !isOpen()) return false;
     if (!fromHistory && historyEntry) {
       if (!closing) {
         closing = true;
@@ -63,15 +118,18 @@ const Sheet = (() => {
     }
     historyEntry = false;
     closing = false;
-    backdrop.classList.remove("open");
-    document.body.classList.remove("sheet-open");
-    hideTimer = setTimeout(() => { backdrop.hidden = true; }, 220);
+    if (concept) appRoot.classList.remove("sheet-open");
+    else {
+      backdrop.classList.remove("open");
+      document.body.classList.remove("sheet-open");
+      hideTimer = setTimeout(() => { backdrop.hidden = true; }, 220);
+    }
     window.dispatchEvent(new Event("bv-sheet-close"));
     return true;
   }
 
   function handleBack() {
-    if (!backdrop || backdrop.hidden || !historyEntry) return false;
+    if (!backdrop || !isOpen() || !historyEntry) return false;
     return close(true);
   }
 

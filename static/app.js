@@ -398,6 +398,7 @@ const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCa
 let debugMode = new URLSearchParams(location.search).get("debug") === "1";
 let currentView = null;
 let appHistoryInitialized = false;
+let currentProfile = null;
 
 window.addEventListener("bv-enable-debug-mode", () => {
   debugMode = true;
@@ -436,6 +437,8 @@ function show(view) {
   $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
   currentView = view;
+  document.documentElement.dataset.bvView = view;
+  window.dispatchEvent(new CustomEvent("bv-app-view", { detail: { view } }));
   Notifications.refreshBadge();
   if (!appHistoryInitialized) {
     history.replaceState({ bvApp: true, view }, "");
@@ -497,6 +500,8 @@ async function enter(profileResponse = null) {
     $("status").textContent = msg;
     return;
   }
+  currentProfile = me;
+  window.dispatchEvent(new CustomEvent("bv-profile-ready", { detail: me }));
   if (me.cache_scope) {
     try {
       await setCacheScope(me.cache_scope);
@@ -654,9 +659,11 @@ $("login-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("avatar").addEventListener("click", () => {
-  if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) logout();
-});
+if (!document.documentElement.hasAttribute("data-bv-concept")) {
+  $("avatar").addEventListener("click", () => {
+    if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) logout();
+  });
+}
 
 $("back-button").addEventListener("click", appBack);
 $("feedback-button").addEventListener("click", () => {
@@ -668,8 +675,7 @@ $("feedback-dialog").addEventListener("close", () => {
   $("feedback-form").reset();
   $("feedback-status").textContent = "";
 });
-$("feedback-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function submitFeedback(message) {
   const send = $("feedback-send");
   const status = $("feedback-status");
   send.disabled = true;
@@ -679,19 +685,30 @@ $("feedback-form").addEventListener("submit", async (event) => {
     const response = await fetchApi("/api/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: $("feedback-message").value }),
+      body: JSON.stringify({ message }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.detail || "Impossibile inviare il feedback. Riprova.");
-    $("feedback-message").value = "";
     status.classList.add("success");
     status.textContent = "Grazie! Il tuo feedback è stato inviato.";
+    return body;
   } catch (error) {
     status.textContent = error instanceof LoginError
       ? "Sessione scaduta. Accedi di nuovo."
       : error.message || "Impossibile inviare il feedback. Riprova.";
+    throw error;
   } finally {
     send.disabled = false;
+  }
+}
+$("feedback-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = $("feedback-message").value;
+  try {
+    await submitFeedback(message);
+    $("feedback-message").value = "";
+  } catch {
+    // The existing dialog reports the error through feedback-status.
   }
 });
 $("menu-button").addEventListener("click", () => {
@@ -717,6 +734,16 @@ $("menu-debug").addEventListener("click", () => {
   navigateTo("debug");
   Notifications.refreshDebugPanel();
 });
+
+window.BetterViva = {
+  api,
+  fetchApi,
+  navigateTo,
+  showHome,
+  logout,
+  submitFeedback,
+  get profile() { return currentProfile; },
+};
 
 // WebCrypto esiste solo su HTTPS o localhost: altrimenti niente salvataggio delle credenziali
 if (!window.crypto?.subtle) {

@@ -504,6 +504,10 @@ const Noticeboard = (() => {
     return true;
   }
 
+  function unreadCount() {
+    return (data?.items || []).filter((item) => !isRead(item)).length;
+  }
+
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
     if (detail.path !== "/api/noticeboard") return;
     data = detail.data;
@@ -523,5 +527,6 @@ const Noticeboard = (() => {
   return {
     open,
     openEntryByIdentity,
+    unreadCount,
   };
 })();

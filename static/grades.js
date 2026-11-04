@@ -516,6 +516,17 @@ const Grades = (() => {
     return load();
   }
 
+  async function openCalculatorForSubject(id, selectedPeriod = null) {
+    if (!data) await load();
+    if (!data) return false;
+    periodPos = selectedPeriod;
+    subjectId = null;
+    const subject = (selectedStats()?.subjects || []).find((item) => String(item.subjectId) === String(id));
+    if (!subject) return false;
+    openCalculator(subject);
+    return true;
+  }
+
   function handleBack() {
     if (subjectId == null) return false;
     subjectId = null;
@@ -537,5 +548,5 @@ const Grades = (() => {
     if (tabs) requestAnimationFrame(() => centerPeriodTab(tabs));
   });
 
-  return { open, openGradeByIdentity, handleBack };
+  return { open, openGradeByIdentity, openCalculatorForSubject, handleBack };
 })();

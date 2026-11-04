@@ -1,164 +1,73 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=0">
-  <meta name="theme-color" content="#a31b13">
-  <title>BetterViva</title>
-  <link rel="manifest" href="/static/manifest.webmanifest">
-  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="BetterViva">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="/static/style.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BetterViva</title>
+<link rel="icon" href="/static/icons/icon-192.png" type="image/png" />
+<link rel="stylesheet" href="/static/concept.css" />
 </head>
 <body>
-  <header class="top">
-    <div class="brand">
-      <span class="logo">BetterViva</span>
-      <span id="sync-status" class="sync-status" role="status" aria-live="polite">Aggiornamento…</span>
-    </div>
-    </button>
-    <button id="feedback-button" class="header-button" type="button" hidden aria-label="Invia un feedback" title="Invia un feedback">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg>
-    </button>
-    <button id="notifications-button" class="header-button notifications-button" type="button" hidden aria-label="Novità" title="Novità">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
-      <span id="notifications-count" class="notifications-count" hidden></span>
-    </button>
-    <button id="avatar" class="avatar" hidden aria-label="Esci" title="Esci"></button>
-    <button id="back-button" class="header-button" type="button" hidden aria-label="Indietro" title="Indietro">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-    </button>
-    <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="app-menu" aria-label="Apri menu">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
-  </header>
-  <div id="connection-toast" class="connection-toast" role="status" aria-live="polite" hidden></div>
-  <dialog id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-title">
-    <form id="feedback-form">
-      <h2 id="feedback-title">Invia un feedback</h2>
-      <p class="feedback-hint">Il messaggio sarà inviato allo sviluppatore. Non includere dati personali.</p>
-      <label for="feedback-message">Il tuo messaggio</label>
-      <textarea id="feedback-message" name="message" rows="5" maxlength="2000" required></textarea>
-      <p id="feedback-status" class="feedback-status" role="status" aria-live="polite"></p>
-      <div class="feedback-actions">
-        <button id="feedback-close" class="secondary" type="button">Chiudi</button>
-        <button id="feedback-send" class="primary" type="submit">Invia</button>
+<div class="app" id="app" data-screen="home">
+  <header>
+    <div class="top">
+      <div class="logo" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 4h7a4 4 0 0 1 1.6 7.67A4.5 4.5 0 0 1 13.5 20H6z" fill="#c4251c"/><path d="m9 12.5 2 2 4-4.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-    </form>
-  </dialog>
-  <dialog id="notifications-dialog" class="notifications-dialog" aria-labelledby="notifications-title">
-    <div class="notifications-heading">
-      <h2 id="notifications-title">Novità</h2>
-      <button id="notifications-close" class="header-button" type="button" aria-label="Chiudi novità" title="Chiudi">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg>
+      <div class="brand">
+        <h1>Better<span>Viva</span></h1>
+        <p><i aria-hidden="true"></i><span id="sub">Aggiornamento…</span></p>
+      </div>
+      <button class="icon-btn" data-sheet="feedback" aria-label="Invia feedback">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="icon-btn" data-sheet="notifiche" aria-label="Novità">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        <span class="badge" aria-hidden="true" hidden></span>
+      </button>
+      <button class="avatar" aria-label="Profilo">BV</button>
+    </div>
+    <div class="seg" id="seg" data-view="orario" role="tablist" aria-label="Vista">
+      <span class="pill" aria-hidden="true"></span>
+      <button role="tab" aria-selected="true" data-view="orario" aria-controls="view-orario">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Orario
+      </button>
+      <button role="tab" aria-selected="false" data-view="eventi" aria-controls="view-eventi">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Eventi
       </button>
     </div>
-    <div id="notifications-list" class="notifications-list"></div>
-    <button id="notifications-clear" class="notifications-clear" type="button">Pulisci tutte le notifiche</button>
-  </dialog>
+  </header>
 
-  <nav id="app-menu" class="app-menu" hidden aria-label="Navigazione">
-    <button id="menu-home" type="button">Home</button>
-    <button id="menu-grades" type="button">Voti</button>
-    <button id="menu-noticeboard" type="button">Bacheca</button>
-    <button id="menu-settings" type="button">Impostazioni</button>
-    <button id="menu-debug" type="button" hidden>Debug</button>
-  </nav>
-  <main>
-    <!-- Accesso -->
-    <section id="view-login" hidden>
-      <h1>Accedi con ClasseViva</h1>
-      <form id="login-form" class="card">
-        <label for="username">Username</label>
-        <input id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required>
-
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-
-        <label class="check">
-          <input id="remember" type="checkbox" checked>
-          <span>Resta connesso su questo dispositivo</span>
-        </label>
-        <p class="hint">Le credenziali restano cifrate in questo browser. Il server non le salva.</p>
-
-        <p id="login-error" class="error" role="alert" hidden></p>
-        <button id="login-btn" type="submit">Accedi</button>
-      </form>
+  <div class="views">
+    <section class="view" id="view-orario" role="tabpanel" aria-label="Orario">
+      <div class="chips" id="chips" role="tablist" aria-label="Giorni"></div>
+      <div class="pager" id="pager"></div>
     </section>
-
-    <!-- Setup iniziale: benvenuto, materie, orario (un giorno per volta) -->
-    <section id="view-setup" hidden>
-      <div id="setup-body"></div>
-    </section>
-
-    <section id="view-settings" hidden>
-      <div id="settings-body"></div>
-    </section>
-
-    <section id="view-grades" hidden aria-label="Voti">
-      <div id="grades-body"></div>
-    </section>
-
-    <section id="view-noticeboard" hidden aria-label="Bacheca">
-      <div id="noticeboard-body"></div>
-    </section>
-
-    <section id="view-debug" hidden aria-label="Debug">
-      <h1>Debug notifiche</h1>
-      <p class="debug-hint">Aggiunge una notifica usando l’elemento più recente già disponibile per ciascun tipo. Le azioni e i dati restano locali.</p>
-      <div class="debug-actions">
-        <button id="debug-add-task" type="button">Notifica ultimo compito</button>
-        <button id="debug-add-grade" type="button">Notifica ultimo voto</button>
-        <button id="debug-add-notice" type="button">Notifica ultimo avviso</button>
-        <button id="debug-clear-notifications" class="secondary" type="button">Pulisci notifiche</button>
+    <section class="view" id="view-eventi" role="tabpanel" aria-label="Eventi" hidden>
+      <div class="ev-scroll" id="evScroll">
+        <div class="filters" id="filters"></div>
+        <div class="cal" id="cal"></div>
+        <div id="groups"></div>
       </div>
-      <p id="debug-notifications-status" class="debug-status" role="status" aria-live="polite"></p>
-      <pre id="debug-notifications-info" class="debug-info"></pre>
     </section>
-
-    <!-- Home: giorni (scorrono) + eventi del giorno (scorrono insieme) -->
-    <section id="view-home" hidden>
-      <div class="daybar">
-        <div id="days" class="days" aria-label="Giorni"></div>
-        <button id="today-button" class="today-button" type="button">Oggi</button>
-        <button id="mode-toggle" class="mode-toggle" type="button" role="switch" aria-checked="false" data-mode="orario" aria-label="Vista eventi" title="Cambia vista">
-          <span class="knob">
-            <svg class="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-            <svg class="i-events" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M14 3l5 5v2"/><path d="M20.3 12.7l-6.6 6.6-2.7.7.7-2.7 6.6-6.6a1.4 1.4 0 0 1 2 2z"/></svg>
-          </span>
-        </button>
+    <section class="view" id="view-voti" role="tabpanel" aria-label="Voti" hidden>
+      <div class="vpane" id="vOverview"><div class="vscroll" id="vOvScroll"></div></div>
+      <div class="vpane" id="vDetail" hidden>
+        <div class="strip" id="strip" role="tablist" aria-label="Materie"></div>
+        <div class="pager" id="vPager"></div>
       </div>
-      <div id="panels" class="panels"></div>
-      <div id="evlist" class="evlist" hidden></div>
-
-      <!-- Calendario annuale: usa gli stessi eventi della home -->
-      <section id="cal" class="cal" aria-labelledby="cal-title" hidden>
-        <h2 id="cal-title">Verifiche e interrogazioni</h2>
-        <div class="cal-month-nav" aria-label="Navigazione mesi">
-          <button id="cal-prev" class="cal-month-arrow" type="button" aria-label="Mese precedente">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <h3 id="cal-month-title" aria-live="polite"></h3>
-          <button id="cal-next" class="cal-month-arrow" type="button" aria-label="Mese successivo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
-        </div>
-        <div class="cal-week" aria-hidden="true">
-          <span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span>
-        </div>
-        <div id="cal-scroll" class="cal-scroll" tabindex="0" aria-label="Calendario dell'anno scolastico">
-          <div id="cal-months"></div>
-        </div>
-      </section>
     </section>
+    <section class="view" id="view-stub" role="tabpanel" aria-label="Sezione" hidden><div class="stub" id="stub"></div></section>
+  </div>
 
-    <p id="status" class="status">Caricamento…</p>
-  </main>
+  <button class="fab" data-sheet="menu" aria-label="Apri menu" aria-haspopup="dialog">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"><div class="grab"></div><div id="sheetBody"></div></div>
+</div>
 
+<script src="/static/concept-bootstrap.js"></script>
   <script src="/static/sheet.js"></script>
   <script src="/static/calendar.js"></script>
   <script src="/static/home.js"></script>
@@ -168,6 +77,7 @@
   <script src="/static/settings.js"></script>
   <script src="/static/notifications.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/concept-app.js"></script>
   <script src="/static/pwa.js"></script>
 </body>
 </html>
