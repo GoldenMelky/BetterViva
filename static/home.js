@@ -254,6 +254,7 @@ const Home = (() => {
       const t = Math.max(0, 1 - Math.abs(i - p));
       el.style.transform = `scale(${SMALL + (1 - SMALL) * t})`;
       el.style.color = mix(t);
+      el.classList.toggle("is-selected", t === 1);
     });
   }
 
