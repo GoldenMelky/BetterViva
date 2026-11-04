@@ -61,6 +61,7 @@ const Noticeboard = (() => {
   let searchOpen = false;
   let searchTerm = "";
   let loading = false;
+  let loadingVisible = false;
   let loadPromise = null;
   let loadError = "";
   let operation = 0;
@@ -374,7 +375,7 @@ const Noticeboard = (() => {
     root().replaceChildren();
     renderHeader();
     renderSearch();
-    if (loading) {
+    if (loading && loadingVisible) {
       root().append(element("p", "noticeboard-loading", "Caricamento della bacheca…"));
     } else if (loadError) {
       root().append(element("p", "noticeboard-error", loadError));
@@ -453,9 +454,15 @@ const Noticeboard = (() => {
     if (loadPromise) return loadPromise;
     loadPromise = (async () => {
     loading = true;
+    loadingVisible = false;
     pendingData = null;
     loadError = "";
     render();
+    const loadingTimer = setTimeout(() => {
+      if (!loading) return;
+      loadingVisible = true;
+      render();
+    }, 300);
     try {
       const response = await api("/api/noticeboard");
       const body = await response.json().catch(() => ({}));
@@ -465,7 +472,9 @@ const Noticeboard = (() => {
     } catch (error) {
       loadError = error.message || "Impossibile caricare la bacheca.";
     } finally {
+      clearTimeout(loadingTimer);
       loading = false;
+      loadingVisible = false;
       pendingData = null;
       render();
     }

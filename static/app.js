@@ -262,6 +262,42 @@ function invalidateApiCache(paths, scope = cacheScope) {
   }
 }
 
+function refreshCachedApi(path, scope, options = {}, force = false) {
+  if (!scope) return Promise.resolve();
+  const refreshKey = `${scope}:${path}`;
+  if (cacheRefreshes.has(refreshKey)) return cacheRefreshes.get(refreshKey);
+  if (!force && apiRefreshStarted.has(refreshKey)) return Promise.resolve();
+
+  apiRefreshStarted.add(refreshKey);
+  const versionKey = cacheVersionKey(scope, path);
+  const version = cacheVersions.get(versionKey) || 0;
+  let succeeded = false;
+  const pending = (async () => {
+    const response = await fetchApi(path, options);
+    if (!response.ok) throw new Error(`Risposta API ${response.status}`);
+    const data = await response.clone().json();
+    if (scope !== cacheScope || version !== (cacheVersions.get(versionKey) || 0)) return;
+    const previous = await dbGet(cacheKey(scope, path));
+    await dbSet(cacheKey(scope, path), { data });
+    if (!sameJsonValue(previous?.data, data)) {
+      emitCacheEvent("bv-api-cache-update", { path, previous: previous?.data || null, data });
+    }
+    succeeded = true;
+  })()
+    .catch((error) => emitCacheEvent("bv-api-cache-error", { path, error }))
+    .finally(() => {
+      cacheRefreshes.delete(refreshKey);
+      if (!succeeded) apiRefreshStarted.delete(refreshKey);
+      if (scope === cacheScope && version !== (cacheVersions.get(versionKey) || 0)) {
+        api(path, options).catch((error) => {
+          console.error("Impossibile riaggiornare la cache API dopo una modifica.", error);
+        });
+      }
+    });
+  cacheRefreshes.set(refreshKey, pending);
+  return pending;
+}
+
 async function cacheSuccessfulResponse(path, response, scope, version) {
   if (!response.ok) return response;
   let data;
@@ -328,45 +364,45 @@ async function api(path, options = {}) {
     return result.response.clone();
   }
 
-  const refreshKey = `${scope}:${path}`;
-  if (!apiRefreshStarted.has(refreshKey) && !cacheRefreshes.has(refreshKey)) {
-    apiRefreshStarted.add(refreshKey);
-    const versionKey = cacheVersionKey(scope, path);
-    const version = cacheVersions.get(versionKey) || 0;
-    let succeeded = false;
-    const pending = (async () => {
-      const response = await fetchApi(path, options);
-      if (!response.ok) throw new Error(`Risposta API ${response.status}`);
-      const data = await response.clone().json();
-      if (scope !== cacheScope || version !== (cacheVersions.get(versionKey) || 0)) return;
-      const previous = await dbGet(cacheKey(scope, path));
-      await dbSet(cacheKey(scope, path), { data });
-      if (!sameJsonValue(previous?.data, data)) {
-        emitCacheEvent("bv-api-cache-update", { path, previous: previous?.data || null, data });
-      }
-      succeeded = true;
-    })()
-      .catch((error) => emitCacheEvent("bv-api-cache-error", { path, error }))
-      .finally(() => {
-        cacheRefreshes.delete(refreshKey);
-        if (!succeeded) apiRefreshStarted.delete(refreshKey);
-        if (scope === cacheScope && version !== (cacheVersions.get(versionKey) || 0)) {
-          api(path, options).catch((error) => {
-            console.error("Impossibile riaggiornare la cache API dopo una modifica.", error);
-          });
-        }
-      });
-    cacheRefreshes.set(refreshKey, pending);
-  }
+  refreshCachedApi(path, scope, options);
   return cachedResponse(cached.data);
+}
+
+async function refreshCachedApiEndpoints() {
+  const scope = cacheScope;
+  if (!scope) return;
+  try {
+    const db = await openDb();
+    const keys = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const request = tx.objectStore(STORE).getAllKeys();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const prefix = `api-cache:${scope}:`;
+    const paths = keys
+      .filter((key) => typeof key === "string" && key.startsWith(prefix))
+      .map((key) => key.slice(prefix.length))
+      .filter((path) => path.startsWith("/api/")
+        && !/^\/api\/noticeboard\/[^/]+\/\d+\/content$/.test(path));
+    await Promise.all(paths.map((path) => refreshCachedApi(path, scope, {}, true)));
+  } catch (error) {
+    console.error("Impossibile riaggiornare gli endpoint API al ritorno nell’app.", error);
+  }
+  await Notifications.refreshBadge();
 }
 
 /* ---------- Interfaccia ---------- */
 const $ = (id) => document.getElementById(id);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
-const debugMode = new URLSearchParams(location.search).get("debug") === "1";
+let debugMode = new URLSearchParams(location.search).get("debug") === "1";
 let currentView = null;
 let appHistoryInitialized = false;
+
+window.addEventListener("bv-enable-debug-mode", () => {
+  debugMode = true;
+  $("menu-debug").hidden = false;
+});
 
 window.addEventListener("offline", () => {
   syncFailed = true;
@@ -375,6 +411,12 @@ window.addEventListener("offline", () => {
 });
 
 window.addEventListener("online", renderSyncStatus);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshCachedApiEndpoints();
+});
+
+const avatarViews = new Set(["home", "grades", "noticeboard", "setup", "settings","debug"]);
+const menuViews = new Set(["home", "grades", "noticeboard", "settings", "debug"]);
 
 function show(view) {
   $("view-login").hidden = view !== "login";
@@ -384,15 +426,12 @@ function show(view) {
   $("view-grades").hidden = view !== "grades";
   $("view-noticeboard").hidden = view !== "noticeboard";
   $("view-debug").hidden = view !== "debug";
-  $("avatar").hidden = view !== "home" && view !== "grades" && view !== "noticeboard"
-    && view !== "setup" && view !== "settings";
-  $("settings-button").hidden = view !== "home";
-  $("feedback-button").hidden = view !== "home";
-  $("notifications-button").hidden = !["home", "grades", "noticeboard", "settings"].includes(view);
+  $("avatar").hidden = !avatarViews.has(view);
+  $("feedback-button").hidden = !avatarViews.has(view);
+  $("notifications-button").hidden = !avatarViews.has(view);
   $("menu-debug").hidden = !debugMode;
-  $("back-button").hidden = view === "home" || view === "login";
-  $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "noticeboard"
-    && view !== "settings" && view !== "setup" && view !== "debug";
+  $("back-button").hidden = ["home","login","setup"].includes(view);
+  $("menu-button").hidden = !menuViews.has(view);
   $("app-menu").hidden = true;
   $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
@@ -620,10 +659,6 @@ $("avatar").addEventListener("click", () => {
 });
 
 $("back-button").addEventListener("click", appBack);
-$("settings-button").addEventListener("click", () => {
-  navigateTo("settings");
-  Settings.open(appBack);
-});
 $("feedback-button").addEventListener("click", () => {
   $("feedback-dialog").showModal();
   $("feedback-message").focus();

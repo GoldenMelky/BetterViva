@@ -22,6 +22,9 @@ if ("serviceWorker" in navigator) {
     hadController = true;
   });
   window.addEventListener("online", checkForUpdates);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkForUpdates();
+  });
 
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js")

@@ -333,6 +333,7 @@ const Notifications = (() => {
     const currentGeneration = generation;
     if (!scope) return;
     try {
+      await (queues.get(scope) || Promise.resolve());
       const state = cleanState(await getState(scope));
       if (currentGeneration === generation && scope === cacheScope) {
         updateBadge(state);

@@ -35,6 +35,11 @@ const Settings = (() => {
       else open(onBack);
     };
     const title = el("h1", null, "Impostazioni");
+    let titleClicks = 0;
+    title.addEventListener("click", () => {
+      titleClicks++;
+      if (titleClicks === 5) window.dispatchEvent(new Event("bv-enable-debug-mode"));
+    });
     const lead = el("p", "lead", "Personalizza BetterViva.");
     const subjects = el("button", "primary settings-edit", "Configura le materie");
     subjects.type = "button";

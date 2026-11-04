@@ -3,6 +3,7 @@
 const Grades = (() => {
   const $ = (id) => document.getElementById(id);
   const root = () => $("grades-body");
+  const loadingIndicatorDelay = 300;
   let data = null;
   let pendingData = null;
   let periodPos = null;
@@ -471,7 +472,10 @@ const Grades = (() => {
     loadPromise = (async () => {
     loading = true;
     pendingData = null;
-    root().replaceChildren(el("p", "grade-loading", "Caricamento voti…"));
+    root().replaceChildren();
+    const loadingTimer = setTimeout(() => {
+      if (loading) root().replaceChildren(el("p", "grade-loading", "Caricamento voti…"));
+    }, loadingIndicatorDelay);
     try {
       const response = await api("/api/grades");
       if (!response.ok) {
@@ -493,6 +497,7 @@ const Grades = (() => {
       const retry = button("Riprova", "grade-retry", load);
       root().replaceChildren(el("p", "grade-error", message), retry);
     } finally {
+      clearTimeout(loadingTimer);
       loading = false;
       pendingData = null;
     }
