@@ -1,6 +1,7 @@
 import requests  # Libreria per effettuare richieste HTTP
 import json      # Libreria per lavorare con dati JSON
 from datetime import date, datetime
+from urllib.parse import quote, urlsplit
 apiUrl = "https://web.spaggiari.eu/rest/"  # URL base dell'API ClasseViva
 headers = {
     "content-type": "application/json",  # Specifica il tipo di contenuto delle richieste
@@ -85,14 +86,45 @@ class Utente:
     def bacheca(self):
         # Recupera i messaggi della bacheca
         endpoint = apiUrl + f"v1/students/{self.login['studentId']}/noticeboard"
-        response = requests.get(endpoint, headers=self.headers)
+        response = requests.get(endpoint, headers=self.headers, timeout=15)
+        response.raise_for_status()
         return json.loads(response.text)
 
-    def downloadAttachment(self, pubId:int, attachmentIndex:int):
-        # Scarica un allegato dalla bacheca
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/noticeboard/attach/CF/{pubId}/{attachmentIndex}"
-        response = requests.get(endpoint, headers=self.headers)
+    def leggiAvviso(self, evtCode: str, pubId: int, reply: dict | None = None):
+        endpoint = apiUrl + (
+            f"v1/students/{self.login['studentId']}/noticeboard/read/"
+            f"{quote(evtCode, safe='')}/{pubId}/101"
+        )
+        if reply is None:
+            response = requests.post(
+                endpoint, data="", headers={
+                    **self.headers,
+                    "content-type": "application/x-www-form-urlencoded",
+                }, timeout=15,
+            )
+        else:
+            response = requests.post(endpoint, json=reply, headers=self.headers, timeout=15)
+        response.raise_for_status()
+        return response.json()
+
+    @staticmethod
+    def _download(endpoint: str, headers: dict) -> bytes:
+        response = requests.get(endpoint, headers=headers, allow_redirects=False, timeout=30)
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = response.headers.get("Location")
+            if not location or urlsplit(location).hostname != "cdndoc.spaggiari.eu":
+                raise ValueError("URL di download non valido.")
+            response = requests.get(location, timeout=30)
+        response.raise_for_status()
         return response.content
+
+    def downloadAttachment(self, pubId: int, attachmentIndex: int, evtCode: str = "CF"):
+        # Scarica un allegato dalla bacheca
+        endpoint = apiUrl + (
+            f"v1/students/{self.login['studentId']}/noticeboard/attach/"
+            f"{quote(evtCode, safe='')}/{pubId}/{attachmentIndex}"
+        )
+        return self._download(endpoint, self.headers)
 
     def libri(self):
         # Recupera i libri scolastici associati allo studente

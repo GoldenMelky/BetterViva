@@ -155,9 +155,10 @@ function silentLogin() {
 }
 
 let cacheScope = null;
-let cacheEpoch = 0;
 const cacheRefreshes = new Map();
+const cacheVersions = new Map();
 const cacheKey = (scope, path) => `api-cache:${scope}:${path}`;
+const cacheVersionKey = (scope, path) => `${scope}:${path}`;
 
 async function clearApiCache(scope = cacheScope) {
   if (!scope) return;
@@ -178,7 +179,6 @@ async function clearApiCache(scope = cacheScope) {
 async function setCacheScope(scope) {
   const previous = await dbGet("api-cache-scope");
   if (previous && previous !== scope) await clearApiCache(previous);
-  if (previous !== scope) cacheEpoch++;
   await dbSet("api-cache-scope", scope);
   cacheScope = scope;
 }
@@ -218,13 +218,58 @@ function emitCacheEvent(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-async function cacheSuccessfulResponse(path, response, scope) {
+function sameJsonValue(left, right) {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => sameJsonValue(value, right[index]));
+  }
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index]
+      && sameJsonValue(left[key], right[key]));
+}
+
+function cachePathsAffectedByMutation(path) {
+  if (/^\/api\/noticeboard\/[^/]+\/\d+\/read$/.test(path)) return ["/api/noticeboard"];
+  if (/^\/api\/events\/[0-9a-f]{12}\/(?:done|kind)$/.test(path)) return ["/api/events"];
+  if (path === "/api/setup") {
+    return ["/api/me", "/api/events", "/api/timetable", "/api/setup/timetable"];
+  }
+  if (path === "/api/subjects") {
+    return ["/api/me", "/api/events", "/api/timetable", "/api/setup/timetable", "/api/grades"];
+  }
+  if (path === "/api/settings/grade-average-mode") return ["/api/me", "/api/grades"];
+  if (path === "/api/settings/color-prompt-dismissed") return ["/api/me"];
+  return [];
+}
+
+function invalidateApiCache(paths, scope = cacheScope) {
+  if (!scope) return;
+  for (const path of paths) {
+    const key = cacheVersionKey(scope, path);
+    cacheVersions.set(key, (cacheVersions.get(key) || 0) + 1);
+  }
+}
+
+async function cacheSuccessfulResponse(path, response, scope, version) {
   if (!response.ok) return response;
+  let data;
   try {
-    const data = await response.clone().json();
-    if (scope === cacheScope) await dbSet(cacheKey(scope, path), { data });
+    data = await response.clone().json();
   } catch (error) {
     console.error("Impossibile salvare la risposta API nella cache locale.", error);
+    return response;
+  }
+  if (scope === cacheScope) {
+    if (version !== (cacheVersions.get(cacheVersionKey(scope, path)) || 0)) return api(path);
+    try { await dbSet(cacheKey(scope, path), { data }); }
+    catch (error) {
+      console.error("Impossibile salvare la risposta API nella cache locale.", error);
+    }
   }
   return response;
 }
@@ -234,15 +279,13 @@ async function api(path, options = {}) {
   if (method !== "GET") {
     const response = await fetchApi(path, options);
     if (response.ok) {
-      cacheEpoch++;
-      try { await clearApiCache(); }
-      catch (error) { console.error("Impossibile invalidare la cache API locale.", error); }
+      invalidateApiCache(cachePathsAffectedByMutation(path));
     }
     return response;
   }
 
   const scope = cacheScope;
-  if (!scope || !path.startsWith("/api/") || path === "/api/me") {
+  if (!scope || !path.startsWith("/api/")) {
     return fetchApi(path, options);
   }
 
@@ -250,32 +293,36 @@ async function api(path, options = {}) {
   try { cached = await dbGet(cacheKey(scope, path)); }
   catch (error) { console.error("Impossibile leggere la cache API locale.", error); }
 
-  const refresh = async () => {
-    const epoch = cacheEpoch;
-    const response = await fetchApi(path, options);
-    if (!response.ok) throw new Error(`Risposta API ${response.status}`);
-    const data = await response.clone().json();
-    if (scope === cacheScope && epoch === cacheEpoch) {
-      try {
-        await dbSet(cacheKey(scope, path), { data });
-        emitCacheEvent("bv-api-cache-update", { path, data });
-      } catch (error) {
-        console.error("Impossibile aggiornare la cache API locale.", error);
-      }
-    }
-    return response;
-  };
-
   if (!cached) {
+    const version = cacheVersions.get(cacheVersionKey(scope, path)) || 0;
     const response = await fetchApi(path, options);
-    return cacheSuccessfulResponse(path, response, scope);
+    return cacheSuccessfulResponse(path, response, scope, version);
   }
 
   const refreshKey = `${scope}:${path}`;
   if (!cacheRefreshes.has(refreshKey)) {
-    const pending = refresh()
+    const versionKey = cacheVersionKey(scope, path);
+    const version = cacheVersions.get(versionKey) || 0;
+    const pending = (async () => {
+      const response = await fetchApi(path, options);
+      if (!response.ok) throw new Error(`Risposta API ${response.status}`);
+      const data = await response.clone().json();
+      if (scope !== cacheScope || version !== (cacheVersions.get(versionKey) || 0)) return;
+      const previous = await dbGet(cacheKey(scope, path));
+      await dbSet(cacheKey(scope, path), { data });
+      if (!sameJsonValue(previous?.data, data)) {
+        emitCacheEvent("bv-api-cache-update", { path, data });
+      }
+    })()
       .catch((error) => emitCacheEvent("bv-api-cache-error", { path, error }))
-      .finally(() => cacheRefreshes.delete(refreshKey));
+      .finally(() => {
+        cacheRefreshes.delete(refreshKey);
+        if (scope === cacheScope && version !== (cacheVersions.get(versionKey) || 0)) {
+          api(path, options).catch((error) => {
+            console.error("Impossibile riaggiornare la cache API dopo una modifica.", error);
+          });
+        }
+      });
     cacheRefreshes.set(refreshKey, pending);
   }
   return cachedResponse(cached.data);
@@ -301,11 +348,14 @@ function show(view) {
   $("view-settings").hidden = view !== "settings";
   $("view-home").hidden = view !== "home";
   $("view-grades").hidden = view !== "grades";
-  $("avatar").hidden = view !== "home" && view !== "grades" && view !== "setup" && view !== "settings";
+  $("view-noticeboard").hidden = view !== "noticeboard";
+  $("avatar").hidden = view !== "home" && view !== "grades" && view !== "noticeboard"
+    && view !== "setup" && view !== "settings";
   $("settings-button").hidden = view !== "home";
   $("feedback-button").hidden = view !== "home";
   $("back-button").hidden = view === "home" || view === "login";
-  $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "settings" && view !== "setup";
+  $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "noticeboard"
+    && view !== "settings" && view !== "setup";
   $("app-menu").hidden = true;
   $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
@@ -337,7 +387,7 @@ function showHome(promptColors = false) {
 async function enter(profileResponse = null) {
   let me = null;
   try {
-    const res = profileResponse || await api("/api/me");
+    const res = profileResponse || await fetchApi("/api/me");
     if (!res.ok) throw new Error(`Profilo non disponibile (${res.status}).`);
     me = await res.json();
   } catch (e) {
@@ -398,7 +448,7 @@ function showLogin(message = "") {
 }
 
 function appBack() {
-  if (Sheet.handleBack()) return;
+  if (Sheet.close()) return;
   if (currentView === "setup" && Setup.back()) return;
   if (currentView === "settings") return showHome();
   if (currentView === "home") return history.back();
@@ -409,6 +459,7 @@ function appBack() {
 function restoreView(view) {
   if (view === "home") showHome();
   else if (view === "grades") Grades.open();
+  else if (view === "noticeboard") Noticeboard.open();
   else if (view === "settings") Settings.open(appBack);
   else if (view === "setup") show("setup");
   else showLogin();
@@ -525,6 +576,10 @@ $("menu-home").addEventListener("click", () => showHome());
 $("menu-grades").addEventListener("click", () => {
   navigateTo("grades");
   Grades.open();
+});
+$("menu-noticeboard").addEventListener("click", () => {
+  navigateTo("noticeboard");
+  Noticeboard.open();
 });
 $("menu-settings").addEventListener("click", () => {
   navigateTo("settings");

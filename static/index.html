@@ -52,6 +52,7 @@
   <nav id="app-menu" class="app-menu" hidden aria-label="Navigazione">
     <button id="menu-home" type="button">Home</button>
     <button id="menu-grades" type="button">Voti</button>
+    <button id="menu-noticeboard" type="button">Bacheca</button>
     <button id="menu-settings" type="button">Impostazioni</button>
   </nav>
   <main>
@@ -87,6 +88,10 @@
 
     <section id="view-grades" hidden aria-label="Voti">
       <div id="grades-body"></div>
+    </section>
+
+    <section id="view-noticeboard" hidden aria-label="Bacheca">
+      <div id="noticeboard-body"></div>
     </section>
 
     <!-- Home: giorni (scorrono) + eventi del giorno (scorrono insieme) -->
@@ -132,6 +137,7 @@
   <script src="/static/calendar.js"></script>
   <script src="/static/home.js"></script>
   <script src="/static/grades.js"></script>
+  <script src="/static/noticeboard.js"></script>
   <script src="/static/setup.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/app.js"></script>

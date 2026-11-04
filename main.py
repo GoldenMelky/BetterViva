@@ -20,7 +20,7 @@ from typing import Literal
 from dotenv import load_dotenv
 
 import requests
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -314,6 +314,76 @@ def with_done(data: dict, username: str) -> dict:
     for event in data["events"]:
         event["done"] = event["id"] in done
     return data
+
+
+@app.get("/api/noticeboard")
+def get_noticeboard(request: Request):
+    """Restituisce gli avvisi della bacheca ClasseViva."""
+    s = current_session(request)
+    try:
+        board = s["user"].bacheca()
+        items = board["items"]
+        if not isinstance(items, list):
+            raise TypeError("La lista degli avvisi non è valida.")
+        return {"items": items}
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("noticeboard: errore nel recupero degli avvisi")
+        raise HTTPException(502, "ClasseViva non ha restituito dati validi per la bacheca.")
+
+
+@app.post("/api/noticeboard/{evt_code}/{pub_id}/read")
+def read_notice(
+    evt_code: str,
+    pub_id: str,
+    request: Request,
+    reply: dict | None = Body(default=None),
+):
+    """Segna come letto l'avviso aperto e restituisce il contenuto."""
+    s = current_session(request)
+    if (not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", evt_code)
+            or not re.fullmatch(r"[0-9]{1,30}", pub_id)):
+        raise HTTPException(422, "Identificativo dell'avviso non valido.")
+    try:
+        if reply is not None:
+            allowed = {"replJoin", "replText", "replFile", "replSign"}
+            if not all(key in allowed for key in reply):
+                raise HTTPException(422, "Contenuto della risposta non valido.")
+            if "replJoin" in reply and not isinstance(reply["replJoin"], bool):
+                raise HTTPException(422, "La conferma deve essere booleana.")
+            if "replSign" in reply and not isinstance(reply["replSign"], bool):
+                raise HTTPException(422, "La firma deve essere booleana.")
+            if "replText" in reply and (
+                not isinstance(reply["replText"], str) or len(reply["replText"]) > 4000
+            ):
+                raise HTTPException(422, "La risposta testuale non è valida.")
+            if "replFile" in reply and (
+                not isinstance(reply["replFile"], str)
+                or len(reply["replFile"]) > 15 * 1024 * 1024
+                or not re.fullmatch(
+                    r"data:[^;,\s]+;base64,[A-Za-z0-9+/]*={0,2}", reply["replFile"]
+                )
+            ):
+                raise HTTPException(422, "Il file allegato non è valido o supera il limite.")
+        return s["user"].leggiAvviso(evt_code, int(pub_id), reply)
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("noticeboard: errore nella lettura di un avviso")
+        raise HTTPException(502, "Impossibile aprire l'avviso. Riprova più tardi.")
+
+
+@app.get("/api/noticeboard/attachment/{evt_code}/{pub_id}/{attach_num}")
+def download_notice_attachment(evt_code: str, pub_id: str, attach_num: str, request: Request):
+    """Scarica un allegato della bacheca."""
+    s = current_session(request)
+    if (not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", evt_code)
+            or not re.fullmatch(r"[0-9]{1,30}", pub_id)
+            or not re.fullmatch(r"[0-9]{1,30}", attach_num)):
+        raise HTTPException(422, "Identificativo dell'allegato non valido.")
+    try:
+        content = s["user"].downloadAttachment(int(pub_id), int(attach_num), evt_code)
+        return Response(content=content, media_type="application/octet-stream")
+    except (requests.RequestException, ValueError, TypeError):
+        log.exception("noticeboard: errore nel download di un allegato")
+        raise HTTPException(502, "Impossibile scaricare l'allegato. Riprova più tardi.")
 
 
 @app.get("/api/events")

@@ -2,6 +2,8 @@
 
 const Settings = (() => {
   const $ = (id) => document.getElementById(id);
+  let latestProfile = null;
+  let profileRevision = 0;
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -15,7 +17,18 @@ const Settings = (() => {
     return button;
   };
 
+  function applyProfile(profile) {
+    const averageMode = $("grade-average-mode");
+    if (!averageMode) return;
+    averageMode.value = profile.grade_average_mode === "average_of_averages"
+      ? "average_of_averages"
+      : "all_grades";
+    averageMode.dataset.saved = averageMode.value;
+    averageMode.disabled = false;
+  }
+
   function open(onBack) {
+    const requestRevision = profileRevision;
     const root = $("settings-body");
     const returnToSettings = () => {
       if (history.state?.bvApp && history.state.view === "setup") history.back();
@@ -69,6 +82,9 @@ const Settings = (() => {
           throw new Error(body.detail || "Impossibile salvare l’impostazione. Riprova.");
         }
         averageMode.dataset.saved = averageMode.value;
+        if (latestProfile) {
+          latestProfile = { ...latestProfile, grade_average_mode: averageMode.value };
+        }
         averageHint.textContent = "Impostazione salvata.";
       } catch (error) {
         averageMode.value = previousMode;
@@ -83,11 +99,10 @@ const Settings = (() => {
     api("/api/me").then(async (res) => {
       if (!res.ok) throw new Error("Impossibile caricare la preferenza della media.");
       const profile = await res.json();
-      averageMode.value = profile.grade_average_mode === "average_of_averages"
-        ? "average_of_averages"
-        : "all_grades";
-      averageMode.dataset.saved = averageMode.value;
-      averageMode.disabled = false;
+      if (requestRevision === profileRevision) {
+        latestProfile = profile;
+        applyProfile(profile);
+      }
     }).catch((error) => {
       averageHint.textContent = error instanceof LoginRequired
         ? "Sessione scaduta. Accedi di nuovo."
@@ -101,7 +116,15 @@ const Settings = (() => {
     footer.append(back);
     root.replaceChildren(title, lead, subjects, timetable, averageLabel, averageMode, averageHint, footer);
     replaceView("settings");
+    if (latestProfile) applyProfile(latestProfile);
   }
+
+  window.addEventListener("bv-api-cache-update", ({ detail }) => {
+    if (detail.path !== "/api/me") return;
+    latestProfile = detail.data;
+    profileRevision++;
+    if (!$("view-settings").hidden) applyProfile(detail.data);
+  });
 
   function promptColorSetup(onComplete) {
     const backdrop = el("div", "color-prompt-backdrop");

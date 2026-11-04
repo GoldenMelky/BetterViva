@@ -4,6 +4,7 @@ const Grades = (() => {
   const $ = (id) => document.getElementById(id);
   const root = () => $("grades-body");
   let data = null;
+  let pendingData = null;
   let periodPos = null;
   let subjectId = null;
   let loading = false;
@@ -427,6 +428,7 @@ const Grades = (() => {
   async function load() {
     if (loading) return;
     loading = true;
+    pendingData = null;
     root().replaceChildren(el("p", "grade-loading", "Caricamento voti…"));
     try {
       const response = await api("/api/grades");
@@ -434,7 +436,7 @@ const Grades = (() => {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.detail || "Impossibile caricare i voti.");
       }
-      data = await response.json();
+      data = pendingData || await response.json();
       if (periods().length <= 1 || (periodPos != null && !periods().some((period) => period.periodPos === periodPos))) {
         periodPos = null;
         subjectId = null;
@@ -450,6 +452,7 @@ const Grades = (() => {
       root().replaceChildren(el("p", "grade-error", message), retry);
     } finally {
       loading = false;
+      pendingData = null;
     }
   }
 
@@ -470,6 +473,10 @@ const Grades = (() => {
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
     if (detail.path !== "/api/grades" || $("view-grades").hidden) return;
     data = detail.data;
+    if (loading) {
+      pendingData = detail.data;
+      return;
+    }
     render();
   });
   window.addEventListener("resize", () => {

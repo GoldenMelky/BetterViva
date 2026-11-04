@@ -4,7 +4,7 @@
    - showDay: i giorni del calendario, con la lista delle prove e "Non è una verifica?";
    - showEvent: un evento della home, per leggerlo per intero e segnarlo come prova (o toglierlo). */
 const Sheet = (() => {
-  let backdrop, sheet, body, hideTimer = null, historyEntry = false;
+  let backdrop, sheet, body, hideTimer = null, historyEntry = false, closing = false;
 
   function build() {
     if (backdrop) return;
@@ -42,6 +42,7 @@ const Sheet = (() => {
     if (backdrop.hidden) {
       history.pushState({ ...(history.state || {}), bvSheet: true }, "");
       historyEntry = true;
+      closing = false;
     }
     body.replaceChildren(...nodes);
     backdrop.hidden = false;
@@ -52,22 +53,26 @@ const Sheet = (() => {
   function update(...nodes) { body.replaceChildren(...nodes); }
 
   function close(fromHistory = false) {
-    if (!backdrop || backdrop.hidden) return;
+    if (!backdrop || backdrop.hidden) return false;
     if (!fromHistory && historyEntry) {
-      historyEntry = false;
-      history.back();
-      return;
+      if (!closing) {
+        closing = true;
+        history.back();
+      }
+      return true;
     }
     historyEntry = false;
+    closing = false;
     backdrop.classList.remove("open");
     document.body.classList.remove("sheet-open");
     hideTimer = setTimeout(() => { backdrop.hidden = true; }, 220);
+    window.dispatchEvent(new Event("bv-sheet-close"));
+    return true;
   }
 
   function handleBack() {
-    if (!backdrop || backdrop.hidden) return false;
-    close(true);
-    return true;
+    if (!backdrop || backdrop.hidden || !historyEntry) return false;
+    return close(true);
   }
 
   return { open, update, close, handleBack };
