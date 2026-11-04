@@ -72,7 +72,7 @@ const Settings = (() => {
         averageHint.textContent = "Impostazione salvata.";
       } catch (error) {
         averageMode.value = previousMode;
-        averageHint.textContent = error instanceof LoginError
+        averageHint.textContent = error instanceof LoginRequired
           ? "Sessione scaduta. Accedi di nuovo."
           : error.message || "Impossibile salvare l’impostazione. Riprova.";
       } finally {
@@ -89,7 +89,7 @@ const Settings = (() => {
       averageMode.dataset.saved = averageMode.value;
       averageMode.disabled = false;
     }).catch((error) => {
-      averageHint.textContent = error instanceof LoginError
+      averageHint.textContent = error instanceof LoginRequired
         ? "Sessione scaduta. Accedi di nuovo."
         : error.message || "Impossibile caricare la preferenza della media.";
       averageMode.disabled = false;
@@ -156,7 +156,7 @@ const Settings = (() => {
         backdrop.remove();
         onComplete();
       } catch (err) {
-        if (err instanceof LoginError) {
+        if (err instanceof LoginRequired) {
           backdrop.remove();
           showLogin(err.message);
           return;

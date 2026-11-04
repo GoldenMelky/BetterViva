@@ -115,7 +115,7 @@ const Setup = (() => {
       applySavedConfiguration(savedConfiguration);
       return true;
     } catch (error) {
-      if (error instanceof LoginError) return showLogin(error.message);
+      if (error instanceof LoginRequired) return showLogin(error.message);
       const root = $("setup-body");
       root.replaceChildren(
         el("h1", null, "Modifica l'orario"),
@@ -211,7 +211,7 @@ const Setup = (() => {
         await loadProposal();
         step = 1; render();
       } catch (e) {
-        if (e instanceof LoginError) return showLogin(e.message);
+        if (e instanceof LoginRequired) return showLogin(e.message);
         err.textContent = "Non riesco a leggere le lezioni da ClasseViva. Riprova tra poco.";
         err.hidden = false;
         go.disabled = false; go.textContent = "Riprova";
@@ -441,7 +441,7 @@ const Setup = (() => {
       }
       onDone();
     } catch (e) {
-      if (e instanceof LoginError) return showLogin(e.message);
+      if (e instanceof LoginRequired) return showLogin(e.message);
       err.textContent = e.message || "Impossibile salvare l'orario. Riprova.";
       err.hidden = false;
       btn.disabled = false; btn.firstChild.textContent = "Salva";
@@ -473,7 +473,7 @@ const Setup = (() => {
       }
       onDone();
     } catch (error) {
-      if (error instanceof LoginError) return showLogin(error.message);
+      if (error instanceof LoginRequired) return showLogin(error.message);
       err.textContent = error.message || "Impossibile salvare le materie. Riprova.";
       err.hidden = false;
       btn.disabled = false; btn.firstChild.textContent = "Salva";

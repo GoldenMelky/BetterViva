@@ -129,7 +129,7 @@ const Home = (() => {
       return want;
     } catch (err) {
       e.done = !want; paintDone(e);
-      if (err instanceof LoginError) { Sheet.close(); showLogin(err.message); }
+      if (err instanceof LoginRequired) { Sheet.close(); showLogin(err.message); }
       else {
         const status = document.getElementById("status");
         status.textContent = "Impossibile salvare. Riprova.";
@@ -482,7 +482,7 @@ const Home = (() => {
       status.textContent = "";
     } catch (e) {
       loading = false;
-      if (e instanceof LoginError) showLogin(e.message);
+      if (e instanceof LoginRequired) showLogin(e.message);
       else status.textContent = "Impossibile caricare gli eventi. Riprova tra poco.";
     }
   }

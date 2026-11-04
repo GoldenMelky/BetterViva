@@ -441,7 +441,7 @@ const Grades = (() => {
       }
       render();
     } catch (error) {
-      if (error instanceof LoginError) {
+      if (error instanceof LoginRequired) {
         showLogin(error.message);
         return;
       }

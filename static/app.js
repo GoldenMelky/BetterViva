@@ -54,9 +54,14 @@ async function loadCredentials() {
 }
 
 /* ---------- Chiamate al backend ---------- */
+// Errore di una richiesta di login (rete, 429, 5xx, credenziali rifiutate).
+// `invalid` è vero solo se il server ha risposto 401 (credenziali rifiutate).
 class LoginError extends Error {
   constructor(message, invalid = false) { super(message); this.invalid = invalid; }
 }
+// La sessione non è rinnovabile: serve il form di login. Si lancia SOLO per un
+// 401 sul login o se non ci sono credenziali salvate, mai per errori del server.
+class LoginRequired extends Error {}
 
 let syncRequests = 0;
 let syncFailed = false;
@@ -135,15 +140,15 @@ let renewing = null;
 function silentLogin() {
   renewing ||= (async () => {
     const cred = await loadCredentials();
-    if (!cred) throw new LoginError("", true); // nessuna credenziale salvata: mostra il form
+    if (!cred) throw new LoginRequired(""); // nessuna credenziale salvata: mostra il form
     try {
       return await postLogin(cred.username, cred.password);
     } catch (e) {
-      if (e.invalid) { // password cambiata: serve un nuovo accesso
+      if (e.invalid) { // 401 sul login: password cambiata, serve un nuovo accesso
         await dbClear();
-        throw new LoginError("Le credenziali salvate non sono più valide. Accedi di nuovo.", true);
+        throw new LoginRequired("Le credenziali salvate non sono più valide. Accedi di nuovo.");
       }
-      throw e;
+      throw e; // rete / 429 / 5xx: NON è un rifiuto, non si passa dal login
     }
   })().finally(() => { renewing = null; });
   return renewing;
@@ -336,9 +341,14 @@ async function enter(profileResponse = null) {
     if (!res.ok) throw new Error(`Profilo non disponibile (${res.status}).`);
     me = await res.json();
   } catch (e) {
-    if (e instanceof LoginError) return showLogin(e.message);
+    if (e instanceof LoginRequired) return showLogin(e.message);
     if (await restoreOfflineHome()) return;
-    return showLogin("Server non raggiungibile. Riprova quando la connessione è disponibile.");
+    // Errore del server o di rete: non è un rifiuto, quindi niente schermata di login
+    // a meno che l'utente non ci sia già (accesso appena fatto dal form).
+    const msg = "Server non raggiungibile. Riprova quando la connessione è disponibile.";
+    if (currentView === "login") return showLogin(msg);
+    $("status").textContent = msg;
+    return;
   }
   if (me.cache_scope) {
     try {
@@ -564,17 +574,21 @@ if (!window.crypto?.subtle) {
       }
       return enter(res);
     }
+    if (res.status !== 401) throw new Error(`Profilo non disponibile (${res.status}).`);
   } catch {
     if (cachedProfile && currentView === "home") return;
     if (await restoreOfflineHome()) return;
     $("status").textContent = "Server non raggiungibile.";
     return;
   }
-  // Nessuna sessione valida: prova il rinnovo silenzioso, altrimenti mostra il form
+  // Sessione rifiutata (401): prova il rinnovo silenzioso, altrimenti mostra il form
   try {
     await silentLogin();
     await enter();
   } catch (e) {
-    showLogin(e.message);
+    if (e instanceof LoginRequired) return showLogin(e.message);
+    // login non riuscito per rete/429/5xx: non è un rifiuto delle credenziali
+    if (await restoreOfflineHome()) return;
+    $("status").textContent = e.message || "Server non raggiungibile.";
   }
 })();
