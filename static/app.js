@@ -24,6 +24,9 @@ const dbGet = (k) => kv("readonly", (s) => s.get(k));
 const dbSet = (k, v) => kv("readwrite", (s) => s.put(v, k));
 const dbDelete = (k) => kv("readwrite", (s) => s.delete(k));
 const dbClear = async () => {
+  Notifications.clear();
+  appDataPrefetchStarted = false;
+  apiRefreshStarted.clear();
   await kv("readwrite", (s) => s.clear());
   cacheScope = null;
 };
@@ -156,6 +159,8 @@ function silentLogin() {
 
 let cacheScope = null;
 const cacheRefreshes = new Map();
+const cacheMisses = new Map();
+const apiRefreshStarted = new Set();
 const cacheVersions = new Map();
 const cacheKey = (scope, path) => `api-cache:${scope}:${path}`;
 const cacheVersionKey = (scope, path) => `${scope}:${path}`;
@@ -179,6 +184,7 @@ async function clearApiCache(scope = cacheScope) {
 async function setCacheScope(scope) {
   const previous = await dbGet("api-cache-scope");
   if (previous && previous !== scope) await clearApiCache(previous);
+  if (previous !== scope) apiRefreshStarted.clear();
   await dbSet("api-cache-scope", scope);
   cacheScope = scope;
 }
@@ -252,6 +258,7 @@ function invalidateApiCache(paths, scope = cacheScope) {
   for (const path of paths) {
     const key = cacheVersionKey(scope, path);
     cacheVersions.set(key, (cacheVersions.get(key) || 0) + 1);
+    apiRefreshStarted.delete(`${scope}:${path}`);
   }
 }
 
@@ -265,8 +272,14 @@ async function cacheSuccessfulResponse(path, response, scope, version) {
     return response;
   }
   if (scope === cacheScope) {
-    if (version !== (cacheVersions.get(cacheVersionKey(scope, path)) || 0)) return api(path);
-    try { await dbSet(cacheKey(scope, path), { data }); }
+    if (version !== (cacheVersions.get(cacheVersionKey(scope, path)) || 0)) return null;
+    try {
+      const previous = await dbGet(cacheKey(scope, path));
+      await dbSet(cacheKey(scope, path), { data });
+      if (!previous || !sameJsonValue(previous.data, data)) {
+        emitCacheEvent("bv-api-cache-update", { path, previous: previous?.data || null, data });
+      }
+    }
     catch (error) {
       console.error("Impossibile salvare la risposta API nella cache locale.", error);
     }
@@ -294,15 +307,33 @@ async function api(path, options = {}) {
   catch (error) { console.error("Impossibile leggere la cache API locale.", error); }
 
   if (!cached) {
-    const version = cacheVersions.get(cacheVersionKey(scope, path)) || 0;
-    const response = await fetchApi(path, options);
-    return cacheSuccessfulResponse(path, response, scope, version);
+    const refreshKey = `${scope}:${path}`;
+    if (!cacheMisses.has(refreshKey)) {
+      const version = cacheVersions.get(cacheVersionKey(scope, path)) || 0;
+      const pending = (async () => {
+        const response = await fetchApi(path, options);
+        const cachedResponse = await cacheSuccessfulResponse(path, response, scope, version);
+        return { response: cachedResponse || response, retry: cachedResponse === null };
+      })();
+      cacheMisses.set(refreshKey, pending);
+    }
+    const pending = cacheMisses.get(refreshKey);
+    let result;
+    try { result = await pending; }
+    finally {
+      if (cacheMisses.get(refreshKey) === pending) cacheMisses.delete(refreshKey);
+    }
+    if (result.retry) return api(path, options);
+    if (result.response.ok) apiRefreshStarted.add(refreshKey);
+    return result.response.clone();
   }
 
   const refreshKey = `${scope}:${path}`;
-  if (!cacheRefreshes.has(refreshKey)) {
+  if (!apiRefreshStarted.has(refreshKey) && !cacheRefreshes.has(refreshKey)) {
+    apiRefreshStarted.add(refreshKey);
     const versionKey = cacheVersionKey(scope, path);
     const version = cacheVersions.get(versionKey) || 0;
+    let succeeded = false;
     const pending = (async () => {
       const response = await fetchApi(path, options);
       if (!response.ok) throw new Error(`Risposta API ${response.status}`);
@@ -311,12 +342,14 @@ async function api(path, options = {}) {
       const previous = await dbGet(cacheKey(scope, path));
       await dbSet(cacheKey(scope, path), { data });
       if (!sameJsonValue(previous?.data, data)) {
-        emitCacheEvent("bv-api-cache-update", { path, data });
+        emitCacheEvent("bv-api-cache-update", { path, previous: previous?.data || null, data });
       }
+      succeeded = true;
     })()
       .catch((error) => emitCacheEvent("bv-api-cache-error", { path, error }))
       .finally(() => {
         cacheRefreshes.delete(refreshKey);
+        if (!succeeded) apiRefreshStarted.delete(refreshKey);
         if (scope === cacheScope && version !== (cacheVersions.get(versionKey) || 0)) {
           api(path, options).catch((error) => {
             console.error("Impossibile riaggiornare la cache API dopo una modifica.", error);
@@ -331,6 +364,7 @@ async function api(path, options = {}) {
 /* ---------- Interfaccia ---------- */
 const $ = (id) => document.getElementById(id);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+const debugMode = new URLSearchParams(location.search).get("debug") === "1";
 let currentView = null;
 let appHistoryInitialized = false;
 
@@ -349,17 +383,21 @@ function show(view) {
   $("view-home").hidden = view !== "home";
   $("view-grades").hidden = view !== "grades";
   $("view-noticeboard").hidden = view !== "noticeboard";
+  $("view-debug").hidden = view !== "debug";
   $("avatar").hidden = view !== "home" && view !== "grades" && view !== "noticeboard"
     && view !== "setup" && view !== "settings";
   $("settings-button").hidden = view !== "home";
   $("feedback-button").hidden = view !== "home";
+  $("notifications-button").hidden = !["home", "grades", "noticeboard", "settings"].includes(view);
+  $("menu-debug").hidden = !debugMode;
   $("back-button").hidden = view === "home" || view === "login";
   $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "noticeboard"
-    && view !== "settings" && view !== "setup";
+    && view !== "settings" && view !== "setup" && view !== "debug";
   $("app-menu").hidden = true;
   $("menu-button").setAttribute("aria-expanded", "false");
   $("status").textContent = "";
   currentView = view;
+  Notifications.refreshBadge();
   if (!appHistoryInitialized) {
     history.replaceState({ bvApp: true, view }, "");
     appHistoryInitialized = true;
@@ -380,7 +418,27 @@ function replaceView(view) {
 function showHome(promptColors = false) {
   replaceView("home");
   Home.load();
+  prefetchSecondaryData();
   if (promptColors === true) Settings.promptColorSetup(() => showHome());
+}
+
+let appDataPrefetchStarted = false;
+function prefetchSecondaryData() {
+  if (appDataPrefetchStarted || !cacheScope) return;
+  appDataPrefetchStarted = true;
+  for (const path of ["/api/grades", "/api/noticeboard"]) {
+    api(path).then(async (response) => {
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Impossibile aggiornare ${path}.`);
+      }
+      await response.json();
+    }).catch((error) => {
+      console.error(`Impossibile precaricare ${path}.`, error);
+      emitCacheEvent("bv-api-cache-error", { path, error });
+      if (error instanceof LoginRequired) showLogin(error.message);
+    });
+  }
 }
 
 // Dopo l'accesso: se manca l'orario dell'anno in corso parte il setup, altrimenti la home
@@ -450,6 +508,7 @@ function showLogin(message = "") {
 function appBack() {
   if (Sheet.close()) return;
   if (currentView === "setup" && Setup.back()) return;
+  if (currentView === "debug") return showHome();
   if (currentView === "settings") return showHome();
   if (currentView === "home") return history.back();
   if (history.state?.bvApp) history.back();
@@ -461,6 +520,10 @@ function restoreView(view) {
   else if (view === "grades") Grades.open();
   else if (view === "noticeboard") Noticeboard.open();
   else if (view === "settings") Settings.open(appBack);
+  else if (view === "debug" && debugMode) {
+    show("debug");
+    Notifications.refreshDebugPanel();
+  }
   else if (view === "setup") show("setup");
   else showLogin();
 }
@@ -485,6 +548,35 @@ window.addEventListener("popstate", (event) => {
 window.addEventListener("bv-api-cache-error", ({ detail }) => {
   if (detail.path === "/api/timetable" || detail.path === "/api/setup/timetable") {
     $("status").textContent = "Dati salvati mostrati; impossibile aggiornarli dal server.";
+  }
+});
+
+window.addEventListener("bv-notification-open", ({ detail }) => {
+  if (detail?.view === "home") {
+    showHome();
+    Home.openEventById(detail.eventId).then((opened) => {
+      if (!opened && detail.event) EventSheet.showEvent(detail.event);
+      else if (!opened) Home.goToDate(detail.date);
+    }).catch((error) => {
+      console.error("Impossibile aprire l’evento dalla notifica.", error);
+      $("status").textContent = "Impossibile aprire questo evento.";
+    });
+  } else if (detail?.view === "grades") {
+    navigateTo("grades");
+    Grades.open().then(() => Grades.openGradeByIdentity(detail.gradeIdentity, detail.grade))
+      .catch((error) => {
+        console.error("Impossibile aprire il voto dalla notifica.", error);
+        $("status").textContent = "Impossibile aprire questo voto.";
+      });
+  } else if (detail?.view === "noticeboard") {
+    navigateTo("noticeboard");
+    Noticeboard.open().then(() => Noticeboard.openEntryByIdentity(detail.evtCode, detail.pubId))
+      .then((opened) => {
+        if (!opened) $("status").textContent = "Questo avviso non è più disponibile.";
+      }).catch((error) => {
+        console.error("Impossibile aprire l’avviso dalla notifica.", error);
+        $("status").textContent = "Impossibile aprire questo avviso.";
+      });
   }
 });
 
@@ -584,6 +676,11 @@ $("menu-noticeboard").addEventListener("click", () => {
 $("menu-settings").addEventListener("click", () => {
   navigateTo("settings");
   Settings.open(appBack);
+});
+$("menu-debug").addEventListener("click", () => {
+  if (!debugMode) return;
+  navigateTo("debug");
+  Notifications.refreshDebugPanel();
 });
 
 // WebCrypto esiste solo su HTTPS o localhost: altrimenti niente salvataggio delle credenziali

@@ -8,6 +8,7 @@ const Grades = (() => {
   let periodPos = null;
   let subjectId = null;
   let loading = false;
+  let loadPromise = null;
 
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -192,6 +193,46 @@ const Grades = (() => {
     if (grade.notesForFamily) nodes.push(el("p", "sheet-text", grade.notesForFamily));
     if (grade.teacherName) nodes.push(el("p", "sheet-meta", grade.teacherName));
     Sheet.open(...nodes);
+  }
+
+  function gradeIdentity(grade, occurrence) {
+    const base = String(grade.gradeId ?? grade.evtId ?? grade.evtCode ?? "")
+      || JSON.stringify([
+        grade.subjectId, grade.evtDate, grade.periodPos, grade.componentDesc,
+        grade.displayValue, grade.decimalValue, grade.teacherName,
+      ]);
+    return JSON.stringify({ base, occurrence });
+  }
+
+  async function openGradeByIdentity(identity, fallback = null) {
+    if (!data) await load();
+    if (!data) {
+      if (fallback) openGrade(fallback);
+      return !!fallback;
+    }
+    if (typeof identity !== "string") {
+      if (fallback) openGrade(fallback);
+      return !!fallback;
+    }
+    const occurrences = new Map();
+    for (const grade of data.grades || []) {
+      const base = String(grade.gradeId ?? grade.evtId ?? grade.evtCode ?? "")
+        || JSON.stringify([
+          grade.subjectId, grade.evtDate, grade.periodPos, grade.componentDesc,
+          grade.displayValue, grade.decimalValue, grade.teacherName,
+        ]);
+      const occurrence = occurrences.get(base) || 0;
+      occurrences.set(base, occurrence + 1);
+      if (gradeIdentity(grade, occurrence) === identity) {
+        openGrade(grade);
+        return true;
+      }
+    }
+    if (fallback) {
+      openGrade(fallback);
+      return true;
+    }
+    return false;
   }
 
   function openCalculator(subject) {
@@ -426,7 +467,8 @@ const Grades = (() => {
   root().addEventListener("touchcancel", (event) => finishTouchNavigation(event, true), { passive: true });
 
   async function load() {
-    if (loading) return;
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
     loading = true;
     pendingData = null;
     root().replaceChildren(el("p", "grade-loading", "Caricamento voti…"));
@@ -454,13 +496,19 @@ const Grades = (() => {
       loading = false;
       pendingData = null;
     }
+    })();
+    try {
+      await loadPromise;
+    } finally {
+      loadPromise = null;
+    }
   }
 
   function open() {
     show("grades");
     subjectId = null;
     root().replaceChildren();
-    load();
+    return load();
   }
 
   function handleBack() {
@@ -484,5 +532,5 @@ const Grades = (() => {
     if (tabs) requestAnimationFrame(() => centerPeriodTab(tabs));
   });
 
-  return { open, handleBack };
+  return { open, openGradeByIdentity, handleBack };
 })();

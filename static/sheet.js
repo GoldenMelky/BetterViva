@@ -162,6 +162,7 @@ const EventSheet = (() => {
       const nodes = [title];
       if (e.teacher) nodes.push(h("p", "sheet-meta", e.teacher));
       if (e.text) nodes.push(h("p", "sheet-text", e.text));
+      if (e.removed) nodes.push(h("p", "sheet-meta", "Questo evento non è più presente nell’agenda."));
 
       const actions = h("div", "sheet-actions");
       const save = async (value, after) => {
@@ -171,7 +172,7 @@ const EventSheet = (() => {
         busy = false; redraw();
       };
 
-      if (!e.kind) {
+      if (!e.removed && !e.kind) {
         const doneBtn = button(e.done ? "Segna da fare" : "Segna come completato", e.done ? "ghost" : "", async () => {
           doneBtn.disabled = true; error = "";
           const state = await Home.toggleDone(e);
@@ -183,7 +184,9 @@ const EventSheet = (() => {
         actions.append(doneBtn);
       }
 
-      if (marking) {
+      if (e.removed) {
+        actions.append(h("p", "sheet-meta", "Elemento rimosso"));
+      } else if (marking) {
         const sel = h("select", "kind-select"); sel.setAttribute("aria-label", "Tipo di prova");
         Object.entries(NAME).forEach(([v, label]) => { const o = h("option", "", label); o.value = v; o.selected = v === kind; sel.append(o); });
         sel.addEventListener("change", () => { kind = sel.value; });

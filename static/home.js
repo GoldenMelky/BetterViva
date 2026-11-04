@@ -23,6 +23,7 @@ const Home = (() => {
   let windowStart = null, yearStart = null, yearEnd = null;
   let timetableData = null, homeData = null;
   let loading = false, pendingEvents = null, pendingTimetable = null, hasPendingTimetable = false;
+  let loadPromise = null;
   let mode = "orario", driver = null, timer = null;
   let touching = false, glideId = 0;     // dito appoggiato / animazione del selettore in corso
   const SETTLE_MS = 120;
@@ -463,7 +464,26 @@ const Home = (() => {
     goTo(index);
   }
 
+  function goToDate(value) {
+    if (!homeData || !yearStart || !yearEnd || typeof value !== "string") return;
+    const date = isoDate(value);
+    if (Number.isNaN(date.getTime()) || key(date) !== value) return;
+    const boundedDay = Math.max(0, Math.min(dayOffset(yearStart, yearEnd), dayOffset(yearStart, date)));
+    ensureWindowForDay(boundedDay);
+    goTo(clamp(dayOffset(windowStart, shiftDate(yearStart, boundedDay))));
+  }
+
+  async function openEventById(id) {
+    if (!eventsById.has(id)) await load();
+    const event = eventsById.get(id);
+    if (!event) return false;
+    EventSheet.showEvent(event);
+    return true;
+  }
+
   async function load() {
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
     const status = document.getElementById("status");
     if (!items.length) status.textContent = "Caricamento…";   // agli aggiornamenti successivi niente lampeggio
     loading = true;
@@ -484,6 +504,12 @@ const Home = (() => {
       loading = false;
       if (e instanceof LoginRequired) showLogin(e.message);
       else status.textContent = "Impossibile caricare gli eventi. Riprova tra poco.";
+    }
+    })();
+    try {
+      await loadPromise;
+    } finally {
+      loadPromise = null;
     }
   }
 
@@ -539,5 +565,5 @@ const Home = (() => {
   }
 
   document.addEventListener("DOMContentLoaded", init);
-  return { load, isHomework, toggleDone, goToToday };
+  return { load, isHomework, toggleDone, goToToday, goToDate, openEventById };
 })();

@@ -61,6 +61,7 @@ const Noticeboard = (() => {
   let searchOpen = false;
   let searchTerm = "";
   let loading = false;
+  let loadPromise = null;
   let loadError = "";
   let operation = 0;
 
@@ -449,6 +450,8 @@ const Noticeboard = (() => {
   }
 
   async function load() {
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
     loading = true;
     pendingData = null;
     loadError = "";
@@ -466,13 +469,30 @@ const Noticeboard = (() => {
       pendingData = null;
       render();
     }
+    })();
+    try {
+      await loadPromise;
+    } finally {
+      loadPromise = null;
+    }
   }
 
   function open() {
     selected = null;
     searchTerm = "";
     searchOpen = false;
-    load();
+    return load();
+  }
+
+  async function openEntryByIdentity(evtCode, pubId) {
+    if (evtCode == null || pubId == null) return false;
+    if (!data) await load();
+    const item = data?.items?.find((entry) => (
+      String(entry.evtCode) === String(evtCode) && String(entry.pubId) === String(pubId)
+    ));
+    if (!item) return false;
+    await openEntry({ item });
+    return true;
   }
 
   window.addEventListener("bv-api-cache-update", ({ detail }) => {
@@ -493,5 +513,6 @@ const Noticeboard = (() => {
 
   return {
     open,
+    openEntryByIdentity,
   };
 })();

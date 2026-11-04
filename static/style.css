@@ -52,6 +52,12 @@ body {
 .avatar { width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: #D9D9D9; cursor: pointer; }
 .header-button { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; margin-left: 0; padding: 7px; color: #FFE9E9; background: none; border: 0; cursor: pointer; }
 .header-button svg { width: 24px; height: 24px; }
+.notifications-button { position: relative; }
+.notifications-count {
+  position: absolute; top: -1px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px;
+  border: 1px solid var(--red); border-radius: 999px; background: #fff; color: var(--red);
+  font-size: .65rem; line-height: 15px; text-align: center;
+}
 .header-button + .avatar { margin-left: 8px; }
 .header-button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 50%; }
 #back-button {
@@ -521,6 +527,49 @@ button.primary { padding: 11px 22px; font: inherit; font-size: 1rem; color: var(
 
 /* Bottom sheet: scheda dei giorni del calendario e degli eventi */
 body.sheet-open { overflow: hidden; }
+.notifications-dialog {
+  width: min(100% - 32px, 480px); max-height: min(80vh, 720px); padding: 20px;
+  border: 1px solid var(--line); border-radius: 24px; color: var(--text); background: var(--card);
+  box-shadow: 0 18px 60px rgba(0,0,0,.45);
+}
+.notifications-dialog::backdrop { background: #0009; }
+.notifications-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.notifications-heading h2 { margin: 0; font-size: 1.4rem; font-weight: 500; }
+.notifications-heading .header-button { color: var(--soft); }
+.notifications-hint { margin: 5px 0 16px; color: var(--soft); font-size: .78rem; line-height: 1.4; }
+.notifications-list { max-height: 55vh; overflow-y: auto; }
+.notifications-group + .notifications-group { margin-top: 16px; }
+.notifications-group h3 { margin: 0 0 7px; color: var(--soft); font-size: .85rem; font-weight: 500; }
+.notification-item {
+  position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 11px 12px;
+  border: 0; border-radius: 13px; color: var(--text); background: #4a1010; text-align: left;
+  font: inherit; cursor: pointer;
+}
+.notification-item + .notification-item { margin-top: 6px; }
+.notification-item.unread { box-shadow: inset 3px 0 var(--red); }
+.notification-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.notification-title { min-width: 0; font-size: .92rem; }
+.notification-event-date {
+  flex: 0 0 auto; margin-left: auto; color: #a66c6c; font-size: .68rem; white-space: nowrap;
+}
+.notification-description { color: var(--soft); font-size: .8rem; line-height: 1.35; }
+.notifications-empty { margin: 18px 0; color: var(--soft); text-align: center; }
+.notifications-clear {
+  width: 100%; margin-top: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px;
+  color: var(--soft); background: transparent; font: inherit; font-size: .85rem; cursor: pointer;
+}
+.notifications-error, .debug-status.error { color: var(--error); }
+.debug-hint { color: var(--soft); font-size: .9rem; line-height: 1.45; }
+.debug-actions { display: grid; gap: 10px; margin-top: 20px; }
+.debug-actions button {
+  width: 100%; padding: 13px 15px; border: 0; border-radius: 14px;
+  color: var(--text); background: var(--red); font: inherit; text-align: left; cursor: pointer;
+}
+.debug-status { min-height: 1.2em; color: var(--soft); }
+.debug-info {
+  padding: 14px; border-radius: 14px; color: var(--soft); background: var(--card);
+  font: .78rem/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center;
   background: rgba(0, 0, 0, 0); transition: background .2s;
