@@ -298,6 +298,7 @@ function show(view) {
   $("view-grades").hidden = view !== "grades";
   $("avatar").hidden = view !== "home" && view !== "grades" && view !== "setup" && view !== "settings";
   $("settings-button").hidden = view !== "home";
+  $("feedback-button").hidden = view !== "home";
   $("back-button").hidden = view === "home" || view === "login";
   $("menu-button").hidden = view !== "home" && view !== "grades" && view !== "settings" && view !== "setup";
   $("app-menu").hidden = true;
@@ -469,6 +470,41 @@ $("back-button").addEventListener("click", appBack);
 $("settings-button").addEventListener("click", () => {
   navigateTo("settings");
   Settings.open(appBack);
+});
+$("feedback-button").addEventListener("click", () => {
+  $("feedback-dialog").showModal();
+  $("feedback-message").focus();
+});
+$("feedback-close").addEventListener("click", () => $("feedback-dialog").close());
+$("feedback-dialog").addEventListener("close", () => {
+  $("feedback-form").reset();
+  $("feedback-status").textContent = "";
+});
+$("feedback-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const send = $("feedback-send");
+  const status = $("feedback-status");
+  send.disabled = true;
+  status.classList.remove("success");
+  status.textContent = "Invio in corso…";
+  try {
+    const response = await fetchApi("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: $("feedback-message").value }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || "Impossibile inviare il feedback. Riprova.");
+    $("feedback-message").value = "";
+    status.classList.add("success");
+    status.textContent = "Grazie! Il tuo feedback è stato inviato.";
+  } catch (error) {
+    status.textContent = error instanceof LoginError
+      ? "Sessione scaduta. Accedi di nuovo."
+      : error.message || "Impossibile inviare il feedback. Riprova.";
+  } finally {
+    send.disabled = false;
+  }
 });
 $("menu-button").addEventListener("click", () => {
   const menu = $("app-menu");

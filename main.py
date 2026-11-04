@@ -45,6 +45,8 @@ db.init_db()
 
 sessions: dict[str, dict] = {}         # sid -> {user: Utente, name, expires}
 attempts: dict[str, list[float]] = {}  # ip -> timestamp dei tentativi di login
+feedback_attempts: dict[str, list[float]] = {}
+feedback_attempts_lock = threading.Lock()
 me_state_cache: dict[str, dict] = {}
 me_state_lock = threading.RLock()
 
@@ -102,6 +104,10 @@ class GradeAverageModeIn(BaseModel):
     mode: Literal["all_grades", "average_of_averages"] = grades.DEFAULT_AVERAGE_MODE
 
 
+class FeedbackIn(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
+
 def norm_username(username: str) -> str:
     """Normalizza un nome utente rimuovendo gli spazi esterni e ignorando le maiuscole."""
     return username.strip().lower()
@@ -144,6 +150,17 @@ def check_rate(ip: str, limit: int = 10, window: int = 600) -> None:
         raise HTTPException(429, "Troppi tentativi. Riprova tra qualche minuto.")
     recent.append(now)
     attempts[ip] = recent
+
+
+def check_feedback_rate(ip: str, limit: int = 3, window: int = 600) -> None:
+    """Limita a tre invii di feedback ogni dieci minuti per indirizzo IP."""
+    now = time.time()
+    with feedback_attempts_lock:
+        recent = [t for t in feedback_attempts.get(ip, []) if now - t < window]
+        if len(recent) >= limit:
+            raise HTTPException(429, "Hai inviato troppi feedback. Riprova tra qualche minuto.")
+        recent.append(now)
+        feedback_attempts[ip] = recent
 
 
 def parse_expiry(value: str | None) -> float:
@@ -574,6 +591,38 @@ def set_grade_average_mode(body: GradeAverageModeIn, request: Request):
         options = db.update_options(s["studentId"], {"grade_average_mode": body.mode})
         update_me_state(s["studentId"], options=options)
     return {"grade_average_mode": body.mode}
+
+
+@app.post("/api/feedback")
+def send_feedback(body: FeedbackIn, request: Request):
+    """Inoltra il feedback a Telegram senza includere dati dell'account."""
+    token = os.getenv("BV_TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("BV_TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        raise HTTPException(503, "Invio feedback non disponibile.")
+
+    message = body.message.strip()
+    if not message:
+        raise HTTPException(422, "Il feedback non può essere vuoto.")
+
+    current_session(request)
+    check_feedback_rate(client_ip(request))
+
+    try:
+        telegram_response = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": f"Nuovo feedback BetterViva:\n\n{message}"},
+            timeout=10,
+        )
+        telegram_response.raise_for_status()
+        telegram_data = telegram_response.json()
+        if not isinstance(telegram_data, dict) or telegram_data.get("ok") is not True:
+            raise ValueError("Telegram ha rifiutato il messaggio.")
+    except (requests.RequestException, ValueError) as error:
+        log.warning("Telegram feedback delivery failed (%s).", type(error).__name__)
+        raise HTTPException(502, "Impossibile inviare il feedback. Riprova più tardi.")
+
+    return {"ok": True}
 
 
 @app.post("/api/logout")

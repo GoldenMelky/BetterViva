@@ -26,6 +26,8 @@ Gli eventi di agenda e compiti vengono unificati in un singolo dataset per tutto
 
 Sul server vengono salvate la configurazione dell'orario e le preferenze delle materie (nome, laboratorio e colore); la cache locale include anche i dati necessari a mostrare eventi e calendario senza attesa.
 
+Il feedback inviato dall'app viene inoltrato a un bot Telegram. Configura sul server le variabili d'ambiente `BV_TELEGRAM_BOT_TOKEN` e `BV_TELEGRAM_CHAT_ID`; non inserirle mai nel codice frontend. Sono accettati messaggi fino a 2000 caratteri, con un limite di tre invii ogni dieci minuti per indirizzo IP. Il feedback non include dati dell'account.
+
 ## Analittica
 
 Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di analittica completamente anonimo, trasparente e **opzionale**.
@@ -45,4 +47,4 @@ Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di 
 - [ ] Renderlo serverless
 - [x] Sistema caching decente
 - [x] Colori per materia
-- [ ] Feedback
+- [x] Feedback

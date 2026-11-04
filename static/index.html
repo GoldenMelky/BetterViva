@@ -23,6 +23,9 @@
     <button id="settings-button" class="header-button" type="button" hidden aria-label="Impostazioni" title="Impostazioni">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.7v-2.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
+    <button id="feedback-button" class="header-button" type="button" hidden aria-label="Invia un feedback" title="Invia un feedback">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg>
+    </button>
     <button id="avatar" class="avatar" hidden aria-label="Esci" title="Esci"></button>
     <button id="back-button" class="header-button" type="button" hidden aria-label="Indietro" title="Indietro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -32,6 +35,19 @@
     </button>
   </header>
   <div id="connection-toast" class="connection-toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-title">
+    <form id="feedback-form">
+      <h2 id="feedback-title">Invia un feedback</h2>
+      <p class="feedback-hint">Il messaggio sarà inviato allo sviluppatore. Non includere dati personali.</p>
+      <label for="feedback-message">Il tuo messaggio</label>
+      <textarea id="feedback-message" name="message" rows="5" maxlength="2000" required></textarea>
+      <p id="feedback-status" class="feedback-status" role="status" aria-live="polite"></p>
+      <div class="feedback-actions">
+        <button id="feedback-close" class="secondary" type="button">Chiudi</button>
+        <button id="feedback-send" class="primary" type="submit">Invia</button>
+      </div>
+    </form>
+  </dialog>
 
   <nav id="app-menu" class="app-menu" hidden aria-label="Navigazione">
     <button id="menu-home" type="button">Home</button>
