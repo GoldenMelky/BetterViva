@@ -419,6 +419,7 @@ const avatarViews = new Set(["home", "grades", "noticeboard", "setup", "settings
 const menuViews = new Set(["home", "grades", "noticeboard", "settings", "debug"]);
 
 function show(view) {
+  $("home-view-switch").hidden = view !== "home";
   $("view-login").hidden = view !== "login";
   $("view-setup").hidden = view !== "setup";
   $("view-settings").hidden = view !== "settings";
