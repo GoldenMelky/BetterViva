@@ -238,7 +238,8 @@ const Home = (() => {
         const card = document.createElement("div"); card.className = "evcard";
         colorSubject(card, e.subject_id, subjectConfig);
         const title = document.createElement("div"); title.className = "evtitle";
-        const subject = line("h3", "", l ? l.name : e.subject || "Evento");
+        const subject = line("h3", "", "");
+        subject.append(line("span", "ev-subject-name", l ? l.name : e.subject || "Evento"));
         if (l) subject.append(line("span", "ev-hour", `${l.hpos}° ora`));
         title.append(subject);
         if (e.kind) title.append(line("span", "badge", KIND[e.kind] || e.kind));
@@ -356,8 +357,10 @@ const Home = (() => {
     panels.hidden = mode !== "orario";
     list.hidden = mode !== "eventi";
     toggle.dataset.mode = mode;
-    toggle.setAttribute("aria-checked", String(mode === "eventi"));
-    toggle.setAttribute("aria-label", mode === "eventi" ? "Vista eventi (tocca per l'orario)" : "Vista orario (tocca per gli eventi)");
+    toggle.querySelectorAll(".mode-option").forEach((option) => {
+      option.classList.toggle("is-active", option.dataset.option === mode);
+      option.setAttribute("aria-pressed", String(option.dataset.option === mode));
+    });
     if (items.length) { view().snap(idx); paint(idx); }
     if (save) { try { localStorage.setItem(MODE_KEY, mode); } catch { /* preferenza non salvata */ } }
   }
@@ -552,7 +555,9 @@ const Home = (() => {
     const lift = (e) => { if (e.touches.length === 0) { touching = false; arm(); } };
     window.addEventListener("touchend", lift, { passive: true });
     window.addEventListener("touchcancel", lift, { passive: true });
-    toggle.addEventListener("click", () => applyMode(mode === "orario" ? "eventi" : "orario"));
+    toggle.querySelectorAll(".mode-option").forEach((option) => {
+      option.addEventListener("click", () => applyMode(option.dataset.option));
+    });
     todayButton.addEventListener("click", () => {
       goToToday();
       Calendar.goToToday();

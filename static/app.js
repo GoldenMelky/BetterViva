@@ -398,6 +398,14 @@ const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCa
 let debugMode = new URLSearchParams(location.search).get("debug") === "1";
 let currentView = null;
 let appHistoryInitialized = false;
+let currentProfile = null;
+let profileSheetAction = null;
+
+window.addEventListener("bv-sheet-close", () => {
+  const action = profileSheetAction;
+  profileSheetAction = null;
+  action?.();
+});
 
 window.addEventListener("bv-enable-debug-mode", () => {
   debugMode = true;
@@ -418,6 +426,44 @@ document.addEventListener("visibilitychange", () => {
 const avatarViews = new Set(["home", "grades", "noticeboard", "setup", "settings","debug"]);
 const menuViews = new Set(["home", "grades", "noticeboard", "settings", "debug"]);
 
+function profileInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : parts[0][0])
+    .toLocaleUpperCase("it-IT");
+}
+
+function openProfile() {
+  const content = $("profile-sheet-template").content.cloneNode(true);
+  const profile = currentProfile || {};
+  const name = profile.name || "Informazione non disponibile";
+  const initials = profileInitials(profile.name);
+  content.querySelector(".profile-initials").textContent = initials;
+  content.querySelector(".profile-name").textContent = name;
+  content.querySelectorAll("[data-profile]").forEach((field) => {
+    const key = field.dataset.profile;
+    const value = key === "class_name"
+      ? profile.class_name || profile.classroom
+      : profile[key];
+    field.textContent = value || "Non disponibile";
+  });
+  content.querySelector(".profile-settings").addEventListener("click", () => {
+    profileSheetAction = () => {
+      navigateTo("settings");
+      Settings.open(appBack);
+    };
+    Sheet.close();
+  });
+  content.querySelector(".profile-logout").addEventListener("click", () => {
+    if (!confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) return;
+    profileSheetAction = logout;
+    Sheet.close();
+  });
+  content.querySelector(".profile-name").id = "profile-title";
+  Sheet.open(content);
+  document.querySelector(".sheet").setAttribute("aria-labelledby", "profile-title");
+}
+
 function show(view) {
   $("view-login").hidden = view !== "login";
   $("view-setup").hidden = view !== "setup";
@@ -427,6 +473,7 @@ function show(view) {
   $("view-noticeboard").hidden = view !== "noticeboard";
   $("view-debug").hidden = view !== "debug";
   $("avatar").hidden = !avatarViews.has(view);
+  $("mode-toggle").hidden = view !== "home";
   $("feedback-button").hidden = !avatarViews.has(view);
   $("notifications-button").hidden = !avatarViews.has(view);
   $("menu-debug").hidden = !debugMode;
@@ -497,6 +544,9 @@ async function enter(profileResponse = null) {
     $("status").textContent = msg;
     return;
   }
+  currentProfile = me;
+  $("avatar").textContent = profileInitials(me.name);
+  $("avatar").setAttribute("aria-label", `Apri il profilo di ${me.name || "utente"}`);
   if (me.cache_scope) {
     try {
       await setCacheScope(me.cache_scope);
@@ -538,6 +588,8 @@ async function restoreOfflineHome() {
 }
 
 function showLogin(message = "") {
+  currentProfile = null;
+  $("avatar").textContent = "";
   const err = $("login-error");
   err.textContent = message;
   err.hidden = !message;
@@ -654,9 +706,7 @@ $("login-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("avatar").addEventListener("click", () => {
-  if (confirm("Uscire da questo dispositivo? Le credenziali salvate verranno cancellate.")) logout();
-});
+$("avatar").addEventListener("click", openProfile);
 
 $("back-button").addEventListener("click", appBack);
 $("feedback-button").addEventListener("click", () => {
