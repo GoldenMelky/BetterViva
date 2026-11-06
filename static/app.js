@@ -443,7 +443,7 @@ function openProfile() {
   content.querySelectorAll("[data-profile]").forEach((field) => {
     const key = field.dataset.profile;
     const value = key === "class_name"
-      ? profile.class_name || profile.classroom
+      ? profile.class_name || profile.class_desc || profile.classroom
       : profile[key];
     field.textContent = value || "Non disponibile";
   });

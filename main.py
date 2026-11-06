@@ -29,7 +29,7 @@ import db
 import grades
 import overrides
 import timetable
-from classeviva import Utente
+from classeviva import ProfileSelectionError, Utente
 from events import build_events
 
 log = logging.getLogger("betterviva")
@@ -214,7 +214,7 @@ def login(creds: Credentials, request: Request, response: Response):
         creds.password = os.getenv("BV_TESTPASS")
     try:
         user = Utente(creds.username.strip(), creds.password)
-    except (requests.RequestException, KeyError, json.JSONDecodeError) as e:
+    except (requests.RequestException, KeyError, json.JSONDecodeError, ProfileSelectionError) as e:
         # JSONDecodeError è un ValueError: va gestito prima del ramo sotto
         print(e)
         raise HTTPException(502, "ClasseViva non è raggiungibile o ha risposto in modo inatteso. Riprova più tardi.")
@@ -233,6 +233,12 @@ def login(creds: Credentials, request: Request, response: Response):
         "username": norm_username(creds.username),
         "name": f'{user.login.get("firstName", "")} {user.login.get("lastName", "")}'.strip(),
         "first_name": (user.login.get("firstName") or "").strip().title(),
+        "class_name": (
+            user.whoami_data.get("classe_desc")
+            or user.whoami_data.get("classDesc")
+            or user.whoami_data.get("class_desc")
+            or ""
+        ),
         "expires": parse_expiry(user.login.get("expire")),
         "studentId": "testuser" if testuser else user.login.get("studentId")
     }
@@ -262,7 +268,8 @@ def me(request: Request):
             for subject in subject_config.values()
         )
         return {
-            "name": s["name"], "first_name": s.get("first_name", ""), "school_year": year,
+            "name": s["name"], "first_name": s.get("first_name", ""),
+            "class_name": s.get("class_name", ""), "school_year": year,
             "cache_scope": hashlib.sha256(student_id.encode()).hexdigest(),
             "grade_average_mode": (
                 options.get("grade_average_mode")

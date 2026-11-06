@@ -9,6 +9,11 @@ headers = {
     "User-Agent": "cvvf/5.12.8/android"  # User-Agent richiesto dall'API
 }
 
+
+class ProfileSelectionError(RuntimeError):
+    """Raised when the account does not contain a valid student profile."""
+
+
 class Utente:
     def __init__(self, username: str = "", password: str = ""):
         # Controlla che username e password siano forniti
@@ -26,36 +31,61 @@ class Utente:
         if "WrongCredentials" in req.text:
             raise ValueError("Wrong username or password.")
         self.login = json.loads(req.text)  # Salva la risposta del login
-        self.login.update({"studentId": self.login['ident'][1:-1]})  # Estrae lo studentId dallo username
         # Header propri di questa istanza, senza toccare quello globale (condiviso tra utenti)
         self.headers = {**headers, "Z-Auth-Token": self.login["token"]}
+        self.whoami_data = self.whoami()
+        student_id = self.whoami_data.get("id")
+        if not (
+            (isinstance(student_id, int) and not isinstance(student_id, bool))
+            or (isinstance(student_id, str) and student_id.isdigit())
+        ):
+            raise ProfileSelectionError("ClasseViva non ha restituito un ID studente valido in whoami.")
+        self.login["studentId"] = str(student_id)
+        if not self.login.get("firstName"):
+            self.login["firstName"] = self.whoami_data.get("nome", "")
+        if not self.login.get("lastName"):
+            self.login["lastName"] = self.whoami_data.get("cognome", "")
     
     def portfolio(self):
         # Restituisce gli account collegati al login.
-        endpoint = apiUrl + f"/xauth/myportfolio"
+        endpoint = apiUrl + "/xauth/myportfolio"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
+
+    def whoami(self):
+        endpoint = apiUrl + "/misc/whoami"
+        response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
+        profile = response.json()
+        if not isinstance(profile, dict):
+            raise ProfileSelectionError("ClasseViva ha restituito un profilo utente non valido.")
+        return profile
 
     def subjects(self):
         endpoint = apiUrl + f"/students/{self.login['studentId']}/subjects"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
+
     def agenda(self, begin: str, end: str = ""):
         # Recupera l'agenda tra due date (o una sola se end non è fornito)
         if end == "":
             end = begin
-        endpoint = apiUrl + f"/students/{self.login['studentId']}/agenda/all/{begin}/{end}"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/agendav2/all/{begin}/{end}"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
-    def homeworks(self, begin: str, end: str = "", date_field: str = "assignmentDate"):
+    def homeworks(self, begin: str, end: str = "", date_field: str | None = "assignmentDate"):
         # Filtra localmente i compiti per data (formato YYYYMMDD)
         if end == "":
             end = begin
         begin_date = datetime.strptime(begin, "%Y%m%d").date()
         end_date = datetime.strptime(end, "%Y%m%d").date()
-        endpoint = apiUrl + f"/students/{self.login['studentId']}/homeworks"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/homeworks/index"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         homeworks = json.loads(response.text)
         if date_field is None:
             return homeworks
@@ -70,8 +100,9 @@ class Utente:
 
     def assenze(self):
         # Recupera i dettagli delle assenze
-        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/details"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/details/"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def didattica(self, contentId: str = ""):
@@ -80,6 +111,7 @@ class Utente:
         if contentId:
             endpoint = endpoint + "/item/" + contentId
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
 
@@ -128,14 +160,16 @@ class Utente:
 
     def libri(self):
         # Recupera i libri scolastici associati allo studente
-        endpoint = apiUrl + f"/students/{self.login['studentId']}/schoolbooks"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/schoolbooks/index"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def voti(self):
         # Recupera i voti dello studente
-        endpoint = apiUrl + f"/students/{self.login['studentId']}/grades"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/grades26"
         response = requests.get(endpoint, headers=self.headers, timeout=15)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def note(self):
@@ -143,26 +177,30 @@ class Utente:
         # NTTE Annotazione del docente 
         # NTCL Nota disciplinare
         # NTWN Richiamo
-        endpoint = apiUrl + f"/students/{self.login['studentId']}/notes/all"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/notes/all/"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def periodi(self):
         # Recupera i periodi scolastici
         endpoint = apiUrl + f"/students/{self.login['studentId']}/periods"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def materie(self):
         # Recupera le materie dello studente
         endpoint = apiUrl + f"/students/{self.login['studentId']}/subjects"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def documenti(self):
         # Recupera i documenti associati allo studente
         endpoint = apiUrl + f"/students/{self.login['studentId']}/documents"
-        response = requests.get(endpoint, headers=self.headers)
+        response = requests.post(endpoint, headers=self.headers)
+        response.raise_for_status()
         return json.loads(response.text)
 
     def lezioni(self, begin: str, end: str = ""):
@@ -171,6 +209,7 @@ class Utente:
             end = begin
         endpoint = apiUrl + f"/students/{self.login['studentId']}/lessons/{begin}/{end}"
         response = requests.get(endpoint, headers=self.headers)
+        response.raise_for_status()
         lessons = json.loads(response.text)
         lessons["lessons"].sort(key=lambda e: e["evtHPos"])
         return lessons
