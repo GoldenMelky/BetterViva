@@ -1,7 +1,7 @@
 "use strict";
 
 /* Setup iniziale obbligatorio (utente senza orario salvato per l'anno in corso).
-   Passi: 0 benvenuto -> 1 materie (nome + laboratorio) -> 2.. orario, un giorno per volta.
+   Passi: 1 materie -> 2 orario -> 3 tema (segnaposto).
    Tutto è precompilato con la proposta del backend (GET /api/setup/timetable);
    il server rivalida ogni cosa. Testi sempre con textContent, mai innerHTML. */
 const Setup = (() => {
@@ -21,7 +21,7 @@ const Setup = (() => {
     right: "M5 12h14M13 6l6 6-6 6",
     down: "M6 9l6 6 6-6",
     check: "M5 12.5l4.5 4.5L19 7.5",
-    edit: "M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4",
+    info: "M12 8h.01M11 12h1v4h1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
   };
 
   let data = null;                       // proposta del backend
@@ -30,11 +30,11 @@ const Setup = (() => {
   let config = {};                       // id -> {name, lab, color}
   let picks = {};                        // "wd-h" -> "" | "<id>" | "<id>:lab"
   let flagged = new Set();               // celle incerte (status != ok): mostrate con "?"
-  let step = 0;                          // 0 benvenuto, 1 materie, 2.. giorni
-  let firstName = "";
+  let step = 1;
+  let selectedDay = 1;
+  let dayCounts = {};
   let onDone = () => {};
   let mode = "initial";                 // initial, subjects, timetable
-  let openColorMenu = null;
   let dirty = false;
   let proposalUpdate = null, proposalRevision = 0;
   let timetableUpdate = null, timetableRevision = 0;
@@ -49,13 +49,24 @@ const Setup = (() => {
   const icon = (name) => {
     const svg = document.createElementNS(SVG, "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "2"); svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round"); svg.setAttribute("aria-hidden", "true");
-    const p = document.createElementNS(SVG, "path"); p.setAttribute("d", ICONS[name]);
+
+    // FISSA LE DIMENSIONI DI BASE DELL'ICONA
+    svg.setAttribute("width", "24");
+    svg.setAttribute("height", "24");
+
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+
+    const p = document.createElementNS(SVG, "path");
+    p.setAttribute("d", ICONS[name]);
     svg.append(p);
     return svg;
-  };
+};
+
   const button = (cls, label, onClick, ...children) => {
     const b = el("button", cls); b.type = "button";
     if (label) b.setAttribute("aria-label", label);
@@ -67,41 +78,41 @@ const Setup = (() => {
   const cellKey = (wd, h) => `${wd}-${h}`;
   const nameOf = (s) => (config[s.id].name || "").trim() || s.short || s.name;
   const labName = (s) => `Lab ${nameOf(s).toLowerCase()}`;
-  const colorName = (value) => COLORS.find(([key]) => key === value)?.[1] || "Colore";
-
-  function closeColorMenu(restoreFocus = false) {
-    if (!openColorMenu) return;
-    const { menu, trigger } = openColorMenu;
-    menu.hidden = true;
-    trigger.setAttribute("aria-expanded", "false");
-    openColorMenu = null;
-    if (restoreFocus) trigger.focus();
-  }
-
-  document.addEventListener("click", (event) => {
-    if (openColorMenu && !openColorMenu.container.contains(event.target)) closeColorMenu();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && openColorMenu) {
-      event.preventDefault();
-      closeColorMenu(true);
-    }
-  });
+  const subjectColor = (value) => COLORS.find(([key]) => key === value)?.[2] || "#6ea8ff";
 
   /* ---------- Avvio ---------- */
-  function start(name, done) {
-    firstName = name || "";
+  function start(_name, done) {
     onDone = done;
     mode = "initial";
-    step = 0;
+    step = -1;
     data = null;
     savedConfiguration = null;
     dirty = false;
     render();
+    loadProposal().then(() => {
+      if (mode !== "initial") return;
+      initializeDayCounts();
+      selectedDay = data.days[0] ?? 1;
+      step = 1;
+      render();
+    }).catch((error) => {
+      if (error instanceof LoginRequired) return showLogin(error.message);
+      step = 0;
+      render();
+    });
+  }
+
+  function initializeDayCounts() {
+    dayCounts = {};
+    data.days.forEach((wd) => {
+      const last = data.cells
+        .filter((cell) => cell.weekday === wd)
+        .reduce((max, cell) => cell.subject_id != null || cell.status !== "empty" ? Math.max(max, cell.hpos) : max, 0);
+      dayCounts[wd] = last;
+    });
   }
 
   async function loadSavedConfiguration(done) {
-    firstName = "";
     onDone = done;
     step = -1;
     dirty = false;
@@ -113,15 +124,14 @@ const Setup = (() => {
       if (!res.ok) throw new Error("Impossibile leggere l'orario salvato.");
       savedConfiguration = savedRevision === timetableRevision ? await res.json() : timetableUpdate;
       applySavedConfiguration(savedConfiguration);
+      initializeDayCounts();
       return true;
     } catch (error) {
       if (error instanceof LoginRequired) return showLogin(error.message);
       const root = $("setup-body");
-      root.replaceChildren(
-        el("h1", null, "Modifica l'orario"),
-        el("p", "error", error.message || "Impossibile caricare l'orario."),
-        button("primary", "Torna alle impostazioni", done),
-      );
+      const content = el("div", "ob-body");
+      content.append(el("p", "error", error.message || "Impossibile caricare l'orario."));
+      renderShell(root, content, navBar(done, "Torna alle impostazioni", done));
       return false;
     }
   }
@@ -166,6 +176,7 @@ const Setup = (() => {
     mode = "timetable";
     if (await loadSavedConfiguration(done)) {
       step = 2;
+      selectedDay = data.days[0] ?? 1;
       render();
     }
   }
@@ -177,7 +188,9 @@ const Setup = (() => {
     data = revision === proposalRevision ? await res.json() : proposalUpdate;
     subjects = data.subjects;
     config = {};
-    subjects.forEach((s) => { config[s.id] = { name: s.short || s.name, lab: !!s.lab, color: "" }; });
+    subjects.forEach((s, index) => {
+      config[s.id] = { name: s.short || s.name, lab: !!s.lab, color: COLORS[index % COLORS.length][0] };
+    });
     picks = {};
     flagged = new Set();
     data.cells.forEach((c) => {
@@ -185,6 +198,7 @@ const Setup = (() => {
       picks[k] = c.subject_id == null ? NONE : String(c.subject_id) + (c.lab ? ":lab" : "");
       if (c.status !== "ok") flagged.add(k);
     });
+    initializeDayCounts();
   }
 
   /* ---------- Rendering ---------- */
@@ -193,141 +207,182 @@ const Setup = (() => {
     root.replaceChildren();
     window.scrollTo(0, 0);
     if (step === -1) {
-      root.append(el("h1", null, "Modifica l'orario"), el("p", "status", "Carico i dati…"));
+      renderShell(root, el("p", "setup-status", "Carico la configurazione…"));
       return;
     }
-    if (step === 0) return renderWelcome(root);
-    if (step === 1) return renderSubjects(root);
-    return renderDay(root, step - 2);
+    if (step === 0) {
+      const content = el("div", "ob-body");
+      const err = errorBox();
+      err.textContent = "Non riesco a leggere le materie e le lezioni da ClasseViva. Riprova tra poco.";
+      err.hidden = false;
+      const retry = button("setup-retry", null, () => {
+        step = -1;
+        render();
+        loadProposal().then(() => {
+          initializeDayCounts();
+          selectedDay = data.days[0] ?? 1;
+          step = 1;
+          render();
+        }).catch((error) => {
+          if (error instanceof LoginRequired) return showLogin(error.message);
+          step = 0;
+          render();
+        });
+      }, el("span", null, "Riprova"));
+      content.append(err, retry);
+      renderShell(root, content);
+      return;
+    }
+
+    const content = el("div", "ob-body");
+    const footer = navBar(
+      () => {
+        if (mode === "initial" && step === 1) return logout();
+        if (mode !== "initial" && step === 1) return onDone();
+        if (mode === "timetable" && step === 2) return onDone();
+        step--;
+        render();
+      },
+      mode === "subjects" ? "Salva" : mode === "timetable" ? "Salva" : step === 3 ? "Termina" : "Continua",
+      mode === "subjects" ? saveSubjects
+        : mode === "timetable" ? save
+          : step === 3 ? save
+            : () => { step++; render(); },
+    );
+    if (step === 1) renderSubjects(content);
+    else if (step === 2) renderDay(content);
+    else renderTheme(content);
+    renderShell(root, content, footer);
   }
 
-  function renderWelcome(root) {
-    const err = errorBox();
-    const go = el("button", "primary", "Inizia"); go.type = "button";
-    const nav = el("div", "nav"); nav.append(go);
-    go.addEventListener("click", async () => {
-      go.disabled = true; go.textContent = "Carico la proposta…"; err.hidden = true;
-      try {
-        await loadProposal();
-        step = 1; render();
-      } catch (e) {
-        if (e instanceof LoginRequired) return showLogin(e.message);
-        err.textContent = "Non riesco a leggere le lezioni da ClasseViva. Riprova tra poco.";
-        err.hidden = false;
-        go.disabled = false; go.textContent = "Riprova";
+  function renderShell(root, content, footer = null) {
+    const shell = el("div", "setup-screen");
+    const header = el("header", "ob-head");
+    const top = el("div", "ob-top");
+    const logo = el("span", "setup-logo");
+    const mark = document.createElementNS(SVG, "svg");
+    mark.setAttribute("viewBox", "0 0 24 24");
+    mark.setAttribute("aria-hidden", "true");
+    const shape = document.createElementNS(SVG, "path");
+    shape.setAttribute("d", "M6 4h7a4 4 0 0 1 1.6 7.67A4.5 4.5 0 0 1 13.5 20H6z");
+    shape.setAttribute("fill", "#c4251c");
+    const tick = document.createElementNS(SVG, "path");
+    tick.setAttribute("d", "m9 12.5 2 2 4-4.5");
+    tick.setAttribute("fill", "none");
+    tick.setAttribute("stroke", "#fff");
+    tick.setAttribute("stroke-width", "2.2");
+    tick.setAttribute("stroke-linecap", "round");
+    tick.setAttribute("stroke-linejoin", "round");
+    mark.append(shape, tick);
+    logo.append(mark);
+    top.append(logo, el("b", null, "Configurazione"));
+    if (step >= 1 && step <= 3) top.append(el("span", "ob-count", `${step} di 3`));
+    header.append(top);
+    if (step >= 1 && step <= 3) {
+      const titles = [
+        ["Le tue materie", "Rinominale, segna quelle con il laboratorio e scegli un colore."],
+        ["Il tuo orario", "Controlla le materie di ogni ora. Ogni giorno può avere un numero di ore diverso."],
+        ["Scegli il tema", "Personalizza l'aspetto di BetterViva."],
+      ];
+      const [title, subtitle] = titles[step - 1];
+      header.append(el("h1", null, title), el("p", null, subtitle));
+      const progress = el("div", "ob-steps");
+      progress.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 3; i++) {
+        const segment = el("i");
+        segment.classList.toggle("on", i < step);
+        progress.append(segment);
       }
-    });
-    root.append(
-      el("h1", "welcome", `Ciao ${firstName}`.trim() + ","),
-      el("p", "welcome-sub", "grazie per usare BetterViva"),
-      el("p", "hint", "Prepariamo insieme materie e orario. Ti proponiamo già tutto noi: devi solo controllare."),
-      err, nav,
-    );
+      header.append(progress);
+    } else {
+      header.append(el("h1", null, mode === "initial" ? "Prepariamo BetterViva" : "Modifica l'orario"));
+    }
+    shell.append(header, content);
+    if (footer) shell.append(footer);
+    root.append(shell);
   }
 
   function renderSubjects(root) {
-    const lead = el("p", "lead");
-    lead.append(el("b", null, "Personalizza"), " le materie: rinominale, scegli un colore e segna quelle con laboratorio");
-    const cols = el("div", "cols");
-    cols.append(el("span", null, "Lab?"), el("span", null, "Materia · colore"), el("span"));
+    const note = el("div", "setup-note");
+    note.append(icon("info"));
+    const noteText = el("p");
+    noteText.append("Abbiamo trovato ", el("b", null, `${subjects.length} materie`),
+      " nel registro. Usa nomi brevi che riconosci al volo; tocca il colore per cambiarlo.");
+    note.append(noteText);
+    root.append(note);
 
-    const list = el("div", "card rows");
-    list.append(cols);
-    subjects.forEach((s) => {
-      const row = el("div", "subj");
+    if (!subjects.length) {
+      root.append(el("p", "setup-empty", "Non sono state trovate materie nel registro."));
+      return;
+    }
 
-      const box = el("label", "labbox");
-      const cb = el("input"); cb.type = "checkbox"; cb.checked = config[s.id].lab;
-      cb.setAttribute("aria-label", `${nameOf(s)}: ha il laboratorio`);
-      cb.addEventListener("change", () => { config[s.id].lab = cb.checked; dirty = true; });
-      const mark = el("i"); mark.append(icon("check"));
-      box.append(cb, mark);
+    subjects.forEach((s, index) => {
+      const card = el("article", "subject-card");
+      card.style.setProperty("--subject-color", subjectColor(config[s.id].color));
+      card.classList.toggle("is-open", index === 0);
 
-      const subject = el("div", "subject-config");
-      const name = el("span", "name", nameOf(s));
+      const row = el("div", "subject-card-row");
+      const colorButton = button("subject-initials", `Scegli il colore per ${nameOf(s)}`, () => {
+        const opening = !card.classList.contains("is-open");
+        root.querySelectorAll(".subject-card.is-open").forEach((other) => {
+          other.classList.remove("is-open");
+          other.querySelector(".subject-initials").setAttribute("aria-expanded", "false");
+        });
+        card.classList.toggle("is-open", opening);
+        colorButton.setAttribute("aria-expanded", String(opening));
+      }, el("span", null, (nameOf(s).trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("") || "?").toUpperCase()));
+      colorButton.setAttribute("aria-expanded", String(index === 0));
+
+      const field = el("div", "subject-name-field");
+      const name = el("input", "subject-name");
+      name.type = "text";
+      name.maxLength = MAX_NAME;
+      name.value = config[s.id].name;
+      name.autocomplete = "off";
+      name.spellcheck = false;
+      name.setAttribute("aria-label", `Nome per ${s.name}`);
       name.title = s.name;
-      const edit = button("round ghost", `Rinomina ${s.name}`, () => {
-        const input = el("input"); input.type = "text"; input.maxLength = MAX_NAME; input.value = config[s.id].name;
-        const done = () => { config[s.id].name = input.value; name.textContent = nameOf(s); input.replaceWith(name); dirty = true; };
-        input.addEventListener("input", () => { dirty = true; });
-        input.addEventListener("blur", done);
-        input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
-        name.replaceWith(input); input.focus(); input.select();
-      }, icon("edit"));
-
-      const colorPicker = el("div", "subject-color-picker");
-      const trigger = button("subject-color-trigger", `Scegli il colore per ${nameOf(s)}`, () => {
-        if (openColorMenu?.trigger === trigger) {
-          closeColorMenu();
-          return;
-        }
-        closeColorMenu();
-        menu.hidden = false;
-        trigger.setAttribute("aria-expanded", "true");
-        openColorMenu = { container: colorPicker, menu, trigger };
-        const selected = menu.querySelector('[aria-selected="true"]') || menu.querySelector('[role="option"]');
-        selected?.focus();
+      name.addEventListener("input", () => {
+        config[s.id].name = name.value;
+        colorButton.firstChild.textContent = (nameOf(s).trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("") || "?").toUpperCase();
+        colorButton.setAttribute("aria-label", `Scegli il colore per ${nameOf(s)}`);
+        lab.setAttribute("aria-label", `Laboratorio per ${nameOf(s)}`);
+        palette.setAttribute("aria-label", `Colore di ${nameOf(s)}`);
+        dirty = true;
       });
-      trigger.setAttribute("aria-haspopup", "listbox");
-      trigger.setAttribute("aria-expanded", "false");
-      const currentSwatch = el("span", "color-swatch");
-      const currentName = el("span", "color-current-name", colorName(config[s.id].color));
-      const currentColor = COLORS.find(([key]) => key === config[s.id].color)?.[2];
-      currentSwatch.classList.toggle("no-color", !currentColor);
-      currentSwatch.style.setProperty("--swatch", currentColor || "transparent");
-      trigger.append(currentSwatch, currentName, icon("down"));
+      field.append(name, el("small", null, `Dal registro: ${s.name}`));
 
-      const menu = el("div", "subject-color-options");
-      menu.hidden = true;
-      menu.setAttribute("role", "listbox");
-      menu.setAttribute("aria-label", `Colori per ${nameOf(s)}`);
-      const addColorOption = (value, label, sample) => {
-        const option = button("subject-color-option", null, () => {
+      const lab = button("lab-switch", `Laboratorio per ${nameOf(s)}`, () => {
+        config[s.id].lab = !config[s.id].lab;
+        lab.setAttribute("aria-checked", String(config[s.id].lab));
+        dirty = true;
+      });
+      lab.setAttribute("role", "switch");
+      lab.setAttribute("aria-checked", String(config[s.id].lab));
+      lab.append(el("span", "lab-track"), el("span", null, "Lab"));
+      row.append(colorButton, field, lab);
+      card.append(row);
+
+      const palette = el("div", "subject-palette");
+      palette.setAttribute("role", "radiogroup");
+      palette.setAttribute("aria-label", `Colore di ${nameOf(s)}`);
+      COLORS.forEach(([value, label, sample]) => {
+        const swatch = button("subject-swatch", label, () => {
           config[s.id].color = value;
-          dirty = true;
-          currentName.textContent = label;
-          currentSwatch.classList.toggle("no-color", !sample);
-          currentSwatch.style.setProperty("--swatch", sample || "transparent");
-          menu.querySelectorAll('[role="option"]').forEach((item) => {
-            item.setAttribute("aria-selected", String(item === option));
+          card.style.setProperty("--subject-color", sample);
+          palette.querySelectorAll('[role="radio"]').forEach((option) => {
+            option.setAttribute("aria-checked", String(option === swatch));
           });
-          closeColorMenu(true);
-        });
-        option.setAttribute("role", "option");
-        option.setAttribute("aria-selected", String((config[s.id].color || "") === value));
-        option.append(el("span", "color-swatch"), el("span", null, label));
-        option.firstChild.classList.toggle("no-color", !sample);
-        option.firstChild.style.setProperty("--swatch", sample || "var(--muted)");
-        option.addEventListener("keydown", (event) => {
-          const options = [...menu.querySelectorAll('[role="option"]')];
-          const index = options.indexOf(option);
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            options[(index + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length].focus();
-          } else if (event.key === "Home" || event.key === "End") {
-            event.preventDefault();
-            options[event.key === "Home" ? 0 : options.length - 1].focus();
-          }
-        });
-        menu.append(option);
-      };
-      addColorOption("", "Nessun colore", null);
-      COLORS.forEach(([value, label, sample]) => addColorOption(value, label, sample));
-      colorPicker.append(trigger, menu);
-      subject.append(name, colorPicker);
-      row.append(box, subject, edit);
-      list.append(row);
+          dirty = true;
+        }, icon("check"));
+        swatch.setAttribute("role", "radio");
+        swatch.setAttribute("aria-checked", String(config[s.id].color === value));
+        swatch.style.setProperty("--swatch-color", sample);
+        palette.append(swatch);
+      });
+      card.append(palette);
+      root.append(card);
     });
-    const back = () => {
-      if (mode !== "initial") onDone();
-      else { step = 0; render(); }
-    };
-    const next = mode === "subjects"
-      ? saveSubjects
-      : () => { step = 2; render(); };
-    const nextLabel = mode === "subjects" ? "Salva" : "Configura l'orario";
-    root.append(el("h1", null, mode === "initial" ? "Configura le materie" : "Modifica le materie"),
-      lead, list, navBar(back, nextLabel, next));
   }
 
   function optionsFor(wd, h) {
@@ -361,49 +416,174 @@ const Setup = (() => {
     return value;
   }
 
-  function renderDay(root, idx) {
-    const wd = data.days[idx], total = data.days.length;
-    const prev = button("round", "Giorno precedente", () => { step--; render(); }, icon("left"));
-    const next = button("round", "Giorno successivo", () => { step++; render(); }, icon("right"));
-    prev.disabled = idx === 0; next.disabled = idx === total - 1;
-    const nav = el("div", "daynav"); nav.append(prev, el("span", null, DAYS[wd]), next);
+  function renderDay(root) {
+    const wd = selectedDay;
+    const count = dayCounts[wd] || 0;
+    const uncertain = [...flagged].filter((key) => {
+      const [day, hour] = key.split("-").map(Number);
+      return hour <= (dayCounts[day] || 0);
+    });
+    if (uncertain.length) {
+      const note = el("div", "setup-note setup-note-warn");
+      note.append(icon("info"));
+      const copy = el("p");
+      copy.append("Abbiamo ricostruito l'orario dalle lezioni dell'ultimo mese, ma non siamo sicuri di ",
+        el("b", null, `${uncertain.length} ${uncertain.length === 1 ? "ora" : "ore"}`), " (in giallo).");
+      note.append(copy);
+      root.append(note);
+    }
 
-    const list = el("div", "hours");
-    for (let h = 1; h <= data.slots; h++) {
-      const k = cellKey(wd, h);
-      const row = el("div", "hour");
-      row.append(el("span", "num", `${h}°`));
-      const wrap = el("div", "sel");
-      const sel = optionsFor(wd, h);
-      picks[k] = sanitize(picks[k] ?? NONE);
-      sel.value = picks[k];
-      if (sel.value !== picks[k]) { sel.value = NONE; picks[k] = NONE; }   // voce non presente
-      const mark = () => {                       // "Matematica?" = proposta da confermare
-        [...sel.options].forEach((o) => { o.textContent = o.dataset.base; });
-        if (flagged.has(k)) sel.selectedOptions[0].textContent += "?";
+    const days = el("div", "setup-days");
+    days.setAttribute("role", "tablist");
+    days.setAttribute("aria-label", "Giorni della settimana");
+    data.days.forEach((day) => {
+      const dayUncertain = [...flagged].some((key) => Number(key.split("-")[0]) === day);
+      const tab = button("setup-day", null, () => {
+        selectedDay = day;
+        render();
+      }, el("span", "setup-day-label", (DAYS[day] || "").slice(0, 3)),
+      el("b", null, String(dayCounts[day] || 0)));
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(day === wd));
+      tab.setAttribute("aria-label", `${DAYS[day]}, ${dayCounts[day] || 0} ${dayCounts[day] === 1 ? "ora" : "ore"}${dayUncertain ? ", da verificare" : ""}`);
+      days.append(tab);
+    });
+    root.append(days);
+
+    const dayHead = el("div", "setup-day-head");
+    const heading = el("div");
+    heading.append(el("h2", null, DAYS[wd] || ""), el("p", null, `${count} ${count === 1 ? "lezione" : "lezioni"}`));
+    const countControl = el("div", "hour-count");
+    const decrease = button("hour-count-button", "Meno ore", () => {
+      if (!dayCounts[wd]) return;
+      const key = cellKey(wd, dayCounts[wd]);
+      picks[key] = NONE;
+      flagged.delete(key);
+      dayCounts[wd]--;
+      dirty = true;
+      render();
+    }, el("span", null, "−"));
+    decrease.disabled = count === 0;
+    const output = el("output", null, `${count} ${count === 1 ? "ora" : "ore"}`);
+    const increase = button("hour-count-button", "Più ore", () => {
+      if (dayCounts[wd] >= 10) return;
+      dayCounts[wd]++;
+      data.slots = Math.max(data.slots, dayCounts[wd]);
+      dirty = true;
+      render();
+    }, el("span", null, "+"));
+    increase.disabled = count >= 10;
+    countControl.append(decrease, output, increase);
+    dayHead.append(heading, countControl);
+    root.append(dayHead);
+
+    const list = el("div", "setup-hours");
+    for (let h = 1; h <= count; h++) {
+      const key = cellKey(wd, h);
+      const row = el("div", "setup-hour");
+      const value = sanitize(picks[key] ?? NONE);
+      picks[key] = value;
+      const id = value.endsWith(":lab") ? Number(value.slice(0, -4)) : Number(value);
+      const subject = subjects.find((item) => item.id === id);
+      row.style.setProperty("--subject-color", subjectColor(subject ? config[subject.id].color : ""));
+      row.classList.toggle("is-uncertain", flagged.has(key));
+      row.append(el("span", "setup-hour-number", `${h}°`));
+
+      const wrap = el("div", "setup-hour-select");
+      const select = optionsFor(wd, h);
+      select.className = "setup-select";
+      select.value = value;
+      if (select.value !== value) {
+        select.value = NONE;
+        picks[key] = NONE;
+      }
+      const mark = () => {
+        [...select.options].forEach((option) => { option.textContent = option.dataset.base; });
+        if (flagged.has(key) && select.selectedOptions[0]) select.selectedOptions[0].textContent += " · da verificare";
       };
       mark();
-      sel.setAttribute("aria-label", `${DAYS[wd]}, ${h}ª ora`);
-      sel.addEventListener("change", () => { picks[k] = sel.value; flagged.delete(k); mark(); dirty = true; });
-      wrap.append(sel, icon("down"));
+      select.setAttribute("aria-label", `${DAYS[wd]}, ${h}ª ora`);
+      select.addEventListener("change", () => {
+        picks[key] = select.value;
+        flagged.delete(key);
+        dirty = true;
+        render();
+      });
+      wrap.append(select, icon("down"));
       row.append(wrap);
+      if (flagged.has(key)) row.append(el("span", "setup-hour-warning", "Da verificare"));
       list.append(row);
     }
-    const last = idx === total - 1;
-    root.append(el("h1", null, mode === "initial" ? "Configura l'orario" : "Modifica l'orario"),
-      el("p", "lead", "Verifica che l'orario sia corretto"), nav, list,
-      navBar(() => {
-        if (mode === "timetable" && idx === 0) onDone();
-        else { step--; render(); }
-      }, last ? "Salva" : "Avanti", last ? save : () => { step++; render(); }));
+    if (!count) list.append(el("p", "setup-empty", "Nessuna lezione. Aggiungi le ore con il pulsante +."));
+    root.append(list);
+
+
+  }
+
+  function renderTheme(root) {
+    const preview = el("div", "theme-preview");
+    const previewHead = el("div", "theme-preview-head");
+    const logo = el("span", "setup-logo");
+    const mark = document.createElementNS(SVG, "svg");
+    mark.setAttribute("viewBox", "0 0 24 24");
+    mark.setAttribute("aria-hidden", "true");
+    const shape = document.createElementNS(SVG, "path");
+    shape.setAttribute("d", "M6 4h7a4 4 0 0 1 1.6 7.67A4.5 4.5 0 0 1 13.5 20H6z");
+    shape.setAttribute("fill", "#c4251c");
+    const tick = document.createElementNS(SVG, "path");
+    tick.setAttribute("d", "m9 12.5 2 2 4-4.5");
+    tick.setAttribute("fill", "none");
+    tick.setAttribute("stroke", "#fff");
+    tick.setAttribute("stroke-width", "2.2");
+    tick.setAttribute("stroke-linecap", "round");
+    tick.setAttribute("stroke-linejoin", "round");
+    mark.append(shape, tick);
+    logo.append(mark);
+    previewHead.append(logo, el("b", null, "BetterViva"), el("span", "theme-preview-avatar"));
+    preview.append(previewHead);
+    const lessonList = el("div", "theme-preview-body");
+    subjects.slice(0, 2).forEach((subject, index) => {
+      const lesson = el("div", "theme-preview-lesson");
+      lesson.style.setProperty("--subject-color", subjectColor(config[subject.id].color));
+      lesson.append(el("span", "setup-hour-number", `${index + 1}°`),
+        el("b", null, nameOf(subject)),
+        index === 1 && config[subject.id].lab ? el("span", "theme-lab-tag", "LAB") : el("span"));
+      lessonList.append(lesson);
+    });
+    preview.append(lessonList);
+    root.append(preview);
+
+    const appearance = el("div", "theme-section");
+    appearance.append(el("h2", null, "Aspetto"), el("span", null, "Scuro"));
+    root.append(appearance);
+    const modes = el("div", "theme-modes");
+    [["Scuro", "dark"], ["Chiaro", "light"], ["Automatico", "auto"]].forEach(([label, mode]) => {
+      const option = el("div", "theme-mode");
+      option.setAttribute("aria-label", `${label}, anteprima`);
+      option.append(el("span", `theme-mini ${mode}`), el("b", null, label));
+      if (mode === "dark") option.classList.add("is-selected");
+      modes.append(option);
+    });
+    root.append(modes);
+
+    const accent = el("div", "theme-section theme-accent-heading");
+    accent.append(el("h2", null, "Colore principale"), el("span", null, "Rosso"));
+    root.append(accent);
+    const colors = el("div", "theme-colors");
+    ["#e5382c", "#f0732a", "#e63e7d", "#8a5cf0", "#2f7bf0", "#1fa971"].forEach((color, index) => {
+      const swatch = el("span", "theme-color");
+      swatch.style.setProperty("--theme-color", color);
+      if (index === 0) swatch.append(icon("check"));
+      colors.append(swatch);
+    });
+    root.append(colors, el("p", "theme-placeholder", "Potrai cambiare tema in qualsiasi momento dal menu."));
   }
 
   function navBar(onBack, label, onNext) {
-    const bar = el("div", "nav");
-    const pill = el("button", "pill"); pill.type = "button";
-    pill.append(el("span", null, label), icon("right"));
-    pill.addEventListener("click", onNext);
-    bar.append(button("round", "Indietro", onBack, icon("left")), pill);
+    const bar = el("div", "ob-foot");
+    const back = button("btn ghost", null, onBack, el("span", null, "Indietro"));
+    const next = button("btn", null, onNext, el("span", null, label), icon("right"));
+    bar.append(back, next);
     return bar;
   }
 
@@ -411,7 +591,7 @@ const Setup = (() => {
   async function save(ev) {
     const btn = ev.currentTarget;
     let err = $("setup-error");
-    if (!err) { err = errorBox(); $("setup-body").insertBefore(err, $("setup-body").querySelector(".nav")); }
+    if (!err) { err = errorBox(); $("setup-body").querySelector(".ob-body").append(err); }
     btn.disabled = true; btn.firstChild.textContent = "Salvo…"; err.hidden = true;
 
     const body = { subjects: {}, cells: [] };
@@ -451,7 +631,7 @@ const Setup = (() => {
   async function saveSubjects(ev) {
     const btn = ev.currentTarget;
     let err = $("setup-error");
-    if (!err) { err = errorBox(); $("setup-body").insertBefore(err, $("setup-body").querySelector(".nav")); }
+    if (!err) { err = errorBox(); $("setup-body").querySelector(".ob-body").append(err); }
     btn.disabled = true; btn.firstChild.textContent = "Salvo…"; err.hidden = true;
 
     const body = { subjects: {} };
@@ -490,7 +670,9 @@ const Setup = (() => {
       if (savedConfiguration) applySavedConfiguration(savedConfiguration);
       else {
         config = {};
-        subjects.forEach((s) => { config[s.id] = { name: s.short || s.name, lab: !!s.lab, color: "" }; });
+        subjects.forEach((s, index) => {
+          config[s.id] = { name: s.short || s.name, lab: !!s.lab, color: COLORS[index % COLORS.length][0] };
+        });
       }
     } else if (detail.path === "/api/timetable") {
       timetableUpdate = detail.data;
@@ -506,12 +688,8 @@ const Setup = (() => {
 
   function back() {
     if (mode === "initial") {
-      if (step > 0) { step--; render(); }
-      return true;
-    }
-    if (mode === "timetable" && step > 2) {
-      step--;
-      render();
+      if (step > 1) { step--; render(); }
+      else if (step === 1) logout();
       return true;
     }
     return false;

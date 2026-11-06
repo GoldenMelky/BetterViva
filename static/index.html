@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=0">
-  <meta name="theme-color" content="#a31b13">
+  <meta name="theme-color" content="#0f0607">
   <title>BetterViva</title>
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
@@ -96,27 +96,43 @@
   </nav>
   <main>
     <!-- Accesso -->
-    <section id="view-login" hidden>
-      <h1>Accedi con ClasseViva</h1>
-      <form id="login-form" class="card">
-        <label for="username">Username</label>
-        <input id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required>
-
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-
-        <label class="check">
+    <section id="view-login" class="login-view" hidden>
+      <div class="login-hero">
+        <div class="login-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 4h7a4 4 0 0 1 1.6 7.67A4.5 4.5 0 0 1 13.5 20H6z" fill="#c4251c"/><path d="m9 12.5 2 2 4-4.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h1>Better<span>Viva</span></h1>
+        <p>ClasseViva, ma meglio</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <div>
+          <h2>Bentornato</h2>
+          <p class="login-sub">Accedi con le credenziali di Spaggiari.</p>
+        </div>
+        <div class="login-field">
+          <label for="username">Codice utente</label>
+          <input class="login-input" id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="es. S1234567X" required>
+        </div>
+        <div class="login-field">
+          <label for="password">Password</label>
+          <div class="password-field">
+            <input class="login-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="La tua password" required>
+            <button id="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <label class="remember-login">
           <input id="remember" type="checkbox" checked>
           <span>Resta connesso su questo dispositivo</span>
         </label>
-        <p class="hint">Le credenziali restano cifrate in questo browser. Il server non le salva.</p>
-
-        <p id="login-error" class="error" role="alert" hidden></p>
-        <button id="login-btn" type="submit">Accedi</button>
+        <p id="login-error" class="login-error" role="alert" hidden></p>
+        <button id="login-btn" class="login-submit" type="submit">Accedi</button>
+        <p class="login-note">Non ricordi la password? Recuperala dal sito del tuo registro.</p>
       </form>
     </section>
 
-    <!-- Setup iniziale: benvenuto, materie, orario (un giorno per volta) -->
+    <!-- Setup iniziale: materie, orario e anteprima del tema -->
     <section id="view-setup" hidden>
       <div id="setup-body"></div>
     </section>

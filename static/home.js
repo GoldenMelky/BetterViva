@@ -8,7 +8,7 @@ const Home = (() => {
   const WINDOW_SHIFT = 14;
   const INITIAL_PAST = 14;
   const WINDOW_EDGE = 7;
-  const MUTED = [134, 62, 62], WHITE = [255, 255, 255];
+  const MUTED = [183, 156, 158], WHITE = [246, 238, 238];
   const RELATIVE = ["Ieri", "Oggi", "Domani"];
   const WEEKDAYS = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
   const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];

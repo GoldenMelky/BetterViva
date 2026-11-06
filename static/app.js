@@ -465,6 +465,7 @@ function openProfile() {
 }
 
 function show(view) {
+  document.body.classList.toggle("auth-flow", view === "login" || view === "setup");
   $("view-login").hidden = view !== "login";
   $("view-setup").hidden = view !== "setup";
   $("view-settings").hidden = view !== "settings";
@@ -590,6 +591,9 @@ async function restoreOfflineHome() {
 function showLogin(message = "") {
   currentProfile = null;
   $("avatar").textContent = "";
+  $("password").type = "password";
+  $("password-toggle").setAttribute("aria-pressed", "false");
+  $("password-toggle").setAttribute("aria-label", "Mostra password");
   const err = $("login-error");
   err.textContent = message;
   err.hidden = !message;
@@ -704,6 +708,14 @@ $("login-form").addEventListener("submit", async (e) => {
     btn.disabled = false;
     btn.textContent = "Accedi";
   }
+});
+
+$("password-toggle").addEventListener("click", (event) => {
+  const input = $("password");
+  const visible = input.type === "password";
+  input.type = visible ? "text" : "password";
+  event.currentTarget.setAttribute("aria-pressed", String(visible));
+  event.currentTarget.setAttribute("aria-label", visible ? "Nascondi password" : "Mostra password");
 });
 
 $("avatar").addEventListener("click", openProfile);

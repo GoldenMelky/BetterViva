@@ -2,7 +2,7 @@ import requests  # Libreria per effettuare richieste HTTP
 import json      # Libreria per lavorare con dati JSON
 from datetime import date, datetime
 from urllib.parse import quote, urlsplit
-apiUrl = "https://web.spaggiari.eu/rest/"  # URL base dell'API ClasseViva
+apiUrl = "https://web.spaggiari.eu/rest/v1"  # URL base dell'API ClasseViva
 headers = {
     "content-type": "application/json",  # Specifica il tipo di contenuto delle richieste
     "Z-Dev-ApiKey": "zoo8Ahy>3thoghoh3To^jai8",   # Chiave API richiesta dal servizio
@@ -15,7 +15,7 @@ class Utente:
         if username == "" or password == "":
             raise ValueError("Username and password cannot be empty.")
         self.username = username  # la password NON viene conservata
-        endpoint = apiUrl + "v1/auth/login"  # Endpoint per il login
+        endpoint = apiUrl + "/auth/login"  # Endpoint per il login
         body = json.dumps({
             "ident": None,
             "pass": password,
@@ -31,20 +31,20 @@ class Utente:
         self.headers = {**headers, "Z-Auth-Token": self.login["token"]}
     
     def portfolio(self):
-        # Recupera il portfolio dello studente
-        endpoint = apiUrl + f"v1/xauth/myportfolio"
+        # Restituisce gli account collegati al login.
+        endpoint = apiUrl + f"/xauth/myportfolio"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
     def subjects(self):
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/subjects"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/subjects"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
     def agenda(self, begin: str, end: str = ""):
         # Recupera l'agenda tra due date (o una sola se end non è fornito)
         if end == "":
             end = begin
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/agenda/all/{begin}/{end}"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/agenda/all/{begin}/{end}"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
@@ -54,7 +54,7 @@ class Utente:
             end = begin
         begin_date = datetime.strptime(begin, "%Y%m%d").date()
         end_date = datetime.strptime(end, "%Y%m%d").date()
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/homeworks"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/homeworks"
         response = requests.get(endpoint, headers=self.headers)
         homeworks = json.loads(response.text)
         if date_field is None:
@@ -70,13 +70,13 @@ class Utente:
 
     def assenze(self):
         # Recupera i dettagli delle assenze
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/absences/details"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/details"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
     def didattica(self, contentId: str = ""):
         # Recupera i materiali didattici, opzionalmente un contenuto specifico
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/didactics"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/didactics"
         if contentId:
             endpoint = endpoint + "/item/" + contentId
         response = requests.get(endpoint, headers=self.headers)
@@ -85,14 +85,14 @@ class Utente:
 
     def bacheca(self):
         # Recupera i messaggi della bacheca
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/noticeboard"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/noticeboard"
         response = requests.get(endpoint, headers=self.headers, timeout=15)
         response.raise_for_status()
         return json.loads(response.text)
 
     def leggiAvviso(self, evtCode: str, pubId: int, reply: dict | None = None):
         endpoint = apiUrl + (
-            f"v1/students/{self.login['studentId']}/noticeboard/read/"
+            f"/students/{self.login['studentId']}/noticeboard/read/"
             f"{quote(evtCode, safe='')}/{pubId}/101"
         )
         if reply is None:
@@ -121,20 +121,20 @@ class Utente:
     def downloadAttachment(self, pubId: int, attachmentIndex: int, evtCode: str = "CF"):
         # Scarica un allegato dalla bacheca
         endpoint = apiUrl + (
-            f"v1/students/{self.login['studentId']}/noticeboard/attach/"
+            f"/students/{self.login['studentId']}/noticeboard/attach/"
             f"{quote(evtCode, safe='')}/{pubId}/{attachmentIndex}"
         )
         return self._download(endpoint, self.headers)
 
     def libri(self):
         # Recupera i libri scolastici associati allo studente
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/schoolbooks"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/schoolbooks"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
     def voti(self):
         # Recupera i voti dello studente
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/grades"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/grades"
         response = requests.get(endpoint, headers=self.headers, timeout=15)
         return json.loads(response.text)
 
@@ -143,25 +143,25 @@ class Utente:
         # NTTE Annotazione del docente 
         # NTCL Nota disciplinare
         # NTWN Richiamo
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/notes/all"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/notes/all"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
     def periodi(self):
         # Recupera i periodi scolastici
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/periods"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/periods"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
     def materie(self):
         # Recupera le materie dello studente
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/subjects"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/subjects"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
     def documenti(self):
         # Recupera i documenti associati allo studente
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/documents"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/documents"
         response = requests.get(endpoint, headers=self.headers)
         return json.loads(response.text)
 
@@ -169,7 +169,7 @@ class Utente:
         # Recupera le lezioni tra due date (o una sola se end non è fornito)
         if end == "":
             end = begin
-        endpoint = apiUrl + f"v1/students/{self.login['studentId']}/lessons/{begin}/{end}"
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/lessons/{begin}/{end}"
         response = requests.get(endpoint, headers=self.headers)
         lessons = json.loads(response.text)
         lessons["lessons"].sort(key=lambda e: e["evtHPos"])
