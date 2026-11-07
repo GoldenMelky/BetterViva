@@ -248,7 +248,8 @@ const Grades = (() => {
         && weight !== null && weight !== "" && typeof weight !== "boolean"
         && Number.isFinite(Number(value)) && Number.isFinite(Number(weight)) && Number(weight) > 0
       ))
-      .map(({ value, weight }) => ({ value: Number(value), weight: Number(weight) }));
+      // weightFactor è una percentuale (100 = peso 1)
+      .map(({ value, weight }) => ({ value: Number(value), weight: Number(weight) / 100 }));
     const totalWeight = contributions.reduce((sum, grade) => sum + grade.weight, 0);
     const average = totalWeight
       ? contributions.reduce((sum, grade) => sum + grade.value * grade.weight, 0) / totalWeight
