@@ -423,8 +423,8 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshCachedApiEndpoints();
 });
 
-const avatarViews = new Set(["home", "grades", "noticeboard", "setup", "settings","debug"]);
-const menuViews = new Set(["home", "grades", "noticeboard", "settings", "debug"]);
+const avatarViews = new Set(["home", "grades", "subjects", "noticeboard", "setup", "settings","debug"]);
+const menuViews = new Set(["home", "grades", "subjects", "noticeboard", "settings", "debug"]);
 
 function profileInitials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
@@ -471,6 +471,7 @@ function show(view) {
   $("view-settings").hidden = view !== "settings";
   $("view-home").hidden = view !== "home";
   $("view-grades").hidden = view !== "grades";
+  $("view-subjects").hidden = view !== "subjects";
   $("view-noticeboard").hidden = view !== "noticeboard";
   $("view-debug").hidden = view !== "debug";
   $("avatar").hidden = !avatarViews.has(view);
@@ -603,6 +604,7 @@ function showLogin(message = "") {
 function appBack() {
   if (Sheet.close()) return;
   if (currentView === "setup" && Setup.back()) return;
+  if (currentView === "subjects" && history.state?.subjectId != null) return history.back();
   if (currentView === "debug") return showHome();
   if (currentView === "settings") return showHome();
   if (currentView === "home") return history.back();
@@ -610,9 +612,10 @@ function appBack() {
   else showHome();
 }
 
-function restoreView(view) {
+function restoreView(view, state = null) {
   if (view === "home") showHome();
   else if (view === "grades") Grades.open();
+  else if (view === "subjects") Subjects.open(state?.subjectId ?? null);
   else if (view === "noticeboard") Noticeboard.open();
   else if (view === "settings") Settings.open(appBack);
   else if (view === "debug" && debugMode) {
@@ -630,9 +633,10 @@ window.addEventListener("popstate", (event) => {
     return;
   }
   if (currentView === "grades" && Grades.handleBack()) return;
+  if (currentView === "subjects" && Subjects.handleBack()) return;
   const view = event.state?.bvApp ? event.state.view : null;
   if (currentView === "settings" && view === "grades") return showHome();
-  if (view) return restoreView(view);
+  if (view) return restoreView(view, event.state);
   if (currentView === "setup") {
     history.pushState({ bvApp: true, view: "setup" }, "");
     return;
@@ -765,6 +769,10 @@ $("menu-home").addEventListener("click", () => showHome());
 $("menu-grades").addEventListener("click", () => {
   navigateTo("grades");
   Grades.open();
+});
+$("menu-subjects").addEventListener("click", () => {
+  navigateTo("subjects");
+  Subjects.open();
 });
 $("menu-noticeboard").addEventListener("click", () => {
   navigateTo("noticeboard");

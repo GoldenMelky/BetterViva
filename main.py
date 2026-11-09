@@ -489,6 +489,29 @@ def get_grades(request: Request):
         raise HTTPException(502, "ClasseViva non ha restituito dati dei voti validi.")
 
 
+@app.get("/api/lessons")
+def get_lessons(request: Request):
+    """Restituisce le lezioni registrate nell'anno scolastico corrente."""
+    s = current_session(request)
+    today = date.today()
+    start, end = timetable.school_year_bounds(today)
+    year = timetable.school_year(today)
+    cached = s.get("lessons")
+    if cached and cached["year"] == year and time.time() - cached["at"] < 600:
+        return cached["data"]
+    try:
+        response = s["user"].lezioni(start.strftime("%Y%m%d"), end.strftime("%Y%m%d"))
+        lessons = response["lessons"]
+        if not isinstance(lessons, list) or not all(isinstance(item, dict) for item in lessons):
+            raise TypeError("La lista delle lezioni non è valida.")
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("lessons: errore nel recupero delle lezioni")
+        raise HTTPException(502, "ClasseViva non ha restituito i dati delle lezioni. Riprova più tardi.")
+    data = {"start": start.isoformat(), "end": end.isoformat(), "lessons": lessons}
+    s["lessons"] = {"at": time.time(), "year": year, "data": data}
+    return data
+
+
 _subjects_lock = threading.Lock()
 
 
@@ -503,6 +526,34 @@ def load_subjects(s: dict) -> list[dict]:
         if "subjects" not in s:
             s["subjects"] = s["user"].subjects()["subjects"]
     return s["subjects"]
+
+
+@app.get("/api/subjects")
+def get_subjects(request: Request):
+    """Restituisce le materie con nomi, docenti e colori configurati."""
+    s = current_session(request)
+    try:
+        subjects = load_subjects(s)
+        config = db.get_options(s["studentId"]).get("subject_config", {})
+        names = subject_names(s)
+        return {
+            "subjects": [
+                {
+                    "id": subject["id"],
+                    "name": names[subject["id"]],
+                    "original_name": subject["description"],
+                    "teachers": [
+                        teacher["teacherName"] for teacher in subject.get("teachers", [])
+                        if teacher.get("teacherName")
+                    ],
+                    "color": (config.get(str(subject["id"])) or {}).get("color"),
+                }
+                for subject in subjects
+            ]
+        }
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("subjects: errore nel recupero delle materie")
+        raise HTTPException(502, "ClasseViva non ha restituito le materie. Riprova più tardi.")
 
 
 def load_lessons(user, today: date) -> list[dict]:
