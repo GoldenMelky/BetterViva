@@ -1,0 +1,187 @@
+# Sistema Assenze – Guida completa
+
+## 1. Come vedere le assenze
+
+### Endpoint lista assenze
+```
+GET {restApiBaseUrl}/rest/v1/students/{studentId}/absences/details/{dBegin}/{dEnd}
+```
+- `dBegin`, `dEnd`: date in formato `YYYYMMDD` (senza trattini). Se omesse, restituisce tutto lo storico.
+- Usato da `ByMrkcLM.js` → `getAbsences()`.
+
+### Endpoint libretto web (giustifiche)
+```
+GET {restApiBaseUrl}/rest/v1/students/{studentId}/absences/librettoweb
+```
+Restituisce l'elenco delle giustifiche (una per evento giustificato).
+
+### Endpoint configurazione
+```
+GET {restApiBaseUrl}/rest/v1/students/{studentId}/absences/librettowebconf
+```
+Restituisce i parametri di configurazione (abilitazioni, causali, ecc.). Viene normalizzato dalla funzione `W` in `Cb29jfNT.js`.
+
+---
+
+## 2. Struttura di un evento assenza
+
+Un oggetto della lista `absences.details` contiene:
+
+```js
+{
+  evtId: number,          // id evento
+  evtCode: "ABA0" | "ABR0" | "ABR1" | "ABU0",
+  evtDate: "YYYY-MM-DD", // data evento
+  evtHPos: number,        // ora di lezione (1,2,3...)
+  evtValue: string|number,// numero ore (o minuti se ritardo breve)
+  evtTime: "HH:MM",       // ora (per ritardi/uscite)
+  isJustified: boolean,   // giustificato (approvato)
+  justifyData, justifyAuthor, justifyReason,
+  rejectData, rejectAuthor, rejectReason,
+  reason: string,         // motivazione inserita
+  pickup: string,         // accompagnatore (per uscite)
+  authorType: string,     // tipo autore
+  otherInfo: [{id, desc}],
+  hPos: number            // usato nel libretto web
+}
+```
+
+### Codici evento
+| Codice | Significato | evtType |
+|--------|-------------|---------|
+| `ABA0` | Assenza | `0` |
+| `ABR0` | Entrata in ritardo | `1` |
+| `ABR1` | Ritardo breve | `1` |
+| `ABU0` | Uscita anticipata | `2` |
+
+### Stati (badge)
+Da `Cb29jfNT.js`:
+- `isJustified === true` → **Giustificata** (badge-success)
+- `webJustifStatus === 1` → **In approvazione** (badge-warning) — la funzione `$` = `isApproved`
+- `webJustifStatus === -1` → **Respinta** (badge-danger) — la funzione `k` = `isRejected`
+- altrimenti → **Da giustificare** (badge-orange)
+
+> ⚠️ Attenzione: nel codice `$` (isApproved) viene usato per filtrare/visualizzare lo stato "in approvazione", non "approvato". La distinzione reale è tra `isJustified` (approvato definitivamente) e `webJustifStatus === 1` (in attesa).
+
+### Filtri disponibili (AssenzeEventiFilters)
+- **type**: `all`, `ABA0`, `ABR0`, `ABU0`
+- **status**: `all`, `to_justify`, `in_approval`, `rejected`, `justified`
+- **dateFrom / dateTo**
+- **sorting**: `newest` / `oldest`
+
+---
+
+## 3. Come giustificare
+
+### Creazione giustifica
+```
+POST {restApiBaseUrl}/rest/v1/students/{studentId}/absences/librettoweb
+Content-Type: application/json
+```
+
+**Body** (da `JustifyModal` e `AddLibrettoModal` in `Dk2yEqv9.js`):
+
+```js
+{
+  evtType: 0 | 1 | 2,        // 0=assenza, 1=ritardo, 2=uscita
+  causalCode: string,        // codice causale (da conf.causals[].code)
+  dateStart: "YYYY-MM-DD",
+  dateEnd: "YYYY-MM-DD",     // = dateStart per ritardi/uscite
+  time: "HH:MM",             // obbligatorio solo se evtType !== 0
+  reason: string,            // motivazione (obbligatoria)
+  pickup: string | null,     // solo se evtType === 2 (uscita)
+  hPos: number,              // ora di lezione (se evtHPos > 0)
+  otherInfo: [{ id: number }] // checkbox "altre informazioni"
+}
+```
+
+### Modifica giustifica
+```
+PUT {restApiBaseUrl}/rest/v1/students/{studentId}/absences/librettoweb/{evtId}
+```
+Stesso body del POST + `hPos` sempre incluso se presente nell'evento.
+
+### Eliminazione
+```
+DELETE {restApiBaseUrl}/rest/v1/students/{studentId}/absences/librettoweb/{evtId}
+```
+
+---
+
+## 4. Parametri di configurazione (`librettoWebConf`)
+
+La funzione `W` in `Cb29jfNT.js` normalizza:
+
+```js
+{
+  enableJustM: bool,       // abilita giustifica "manuale" (generica)
+  enableJustA: bool,       // abilita giustifica assenze
+  enableJustR: bool,       // abilita giustifica ritardi
+  enableJustU: bool,       // abilita giustifica uscite
+
+  autoApproveA/R/U: bool,  // auto-approvazione per tipo
+
+  numDaysEditA/R/U: number, // giorni entro cui si può modificare
+  numDaysStopA/R/U: number, // giorni oltre i quali NON si può più giustificare (scadenza)
+
+  maxDaysFuture: number,   // max giorni nel futuro per giustificare
+  maxPeriodDays: number,   // durata massima periodo assenza (default 15)
+
+  causals: [{code, desc}],       // elenco causali (dropdown "Motivo")
+  otherInfo: [{id, desc}]        // checkbox "Altre informazioni"
+}
+```
+
+### Come vengono usati
+- **`enableJustA/R/U`** → i filtri tipo evento mostrano solo i tipi abilitati.
+- **`numDaysStopA/R/U`** → funzione `j()` (`isExpired`): se `oggi - evtDate > numDaysStop`, l'evento è **scaduto** e non giustificabile. Messaggi `assenze.expiredAbsence/Delay/Exit`.
+- **`maxDaysFuture`** → validazione frontend: se `0` → `errorNoFuture`, altrimenti `errorFuture` con `{days}`.
+- **`maxPeriodDays`** → intervallo massimo tra `dateStart` e `dateEnd` (validazione `errorMaxPeriod`).
+- **`enableJustM`** → se attivo, mostra la tab "Giustifica in anticipo" (AddLibrettoModal) e la lista `AssenzeLibretto`.
+- **`autoApproveA/R/U`** → passato al backend (non usato lato client per UI, solo per il payload in fase di submit).
+- **`causals`** → opzioni `{value: code, text: desc}`.
+- **`otherInfo`** → checkbox `{id: number}` inviati come `otherInfo: [{id}]`.
+
+---
+
+## 5. Significato dei valori `evtValue` / `evtHPos`
+
+Dalla funzione `G()` in `Cb29jfNT.js`:
+
+- **`evtHPos`** = numero dell'ora (1 = prima ora, 2 = seconda…)
+- **`evtValue`** = numero di ore perse (o minuti se ritardo breve)
+
+Esempi:
+- Assenza 2 ore in 3ª-4ª → `evtHPos = 3`, `evtValue = 2` → mostra "Dalla 3ª alla 4ª ora (2 ore perse)"
+- Ritardo di 1 ora in 2ª → `evtHPos = 2`, `evtValue = 1` → mostra "Alla 3ª ora (1 ora persa)"
+- Assenza giornaliera → `evtHPos = 0`, `evtValue = "1"` (giorni)
+
+---
+
+## 6. Scadenze e validazioni (riepilogo)
+
+| Validazione | Funzione / messaggio |
+|-------------|----------------------|
+| Evento troppo vecchio | `errorTooOld` / `errorTooOldSingle` (numDaysStopA/R/U) |
+| Data futura oltre limite | `errorFuture` / `errorNoFuture` (maxDaysFuture) |
+| Periodo troppo lungo | `errorMaxPeriod` (maxPeriodDays) |
+| Fine < inizio | `errorEndBeforeStart` |
+| Data < inizio anno scolastico | `errorSchoolYear` |
+| Evento scaduto (visuale) | `assenze.expiredAbsence/Delay/Exit` |
+| Causale mancante | disabilita "Conferma" |
+| Motivazione mancante | disabilita "Conferma" |
+
+---
+
+## 7. Flusso riassuntivo
+
+```
+1. Carica conf: GET /students/{id}/absences/librettowebconf
+2. Carica eventi: GET /students/{id}/absences/details/{from}/{to}
+3. Carica giustifiche: GET /students/{id}/absences/librettoweb
+4. Per ogni evento: merge con la giustifica corrispondente (match su evtType/dateStart/dateEnd)
+5. Se non scaduto + non readonly + enableJustX → mostra bottone "Giustifica"
+6. Submit → POST /students/{id}/absences/librettoweb
+7. Modifica → PUT /students/{id}/absences/librettoweb/{evtId}
+8. Elimina → DELETE /students/{id}/absences/librettoweb/{evtId}
+```

@@ -20,7 +20,7 @@ from typing import Literal
 from dotenv import load_dotenv
 
 import requests
-from fastapi import Body, FastAPI, HTTPException, Request, Response
+from fastapi import Body, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -106,6 +106,22 @@ class GradeAverageModeIn(BaseModel):
 
 class FeedbackIn(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
+
+
+class OtherInfoIn(BaseModel):
+    id: int = Field(ge=0)
+
+
+class JustificationIn(BaseModel):
+    evtType: Literal[0, 1, 2]
+    causalCode: str = Field(min_length=1, max_length=64)
+    dateStart: date
+    dateEnd: date
+    time: str | None = Field(default=None, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    reason: str = Field(min_length=1, max_length=1000)
+    pickup: str | None = Field(default=None, max_length=300)
+    hPos: int | None = Field(default=None, ge=1)
+    otherInfo: list[OtherInfoIn] = Field(default_factory=list, max_length=50)
 
 
 def norm_username(username: str) -> str:
@@ -391,6 +407,120 @@ def download_notice_attachment(evt_code: str, pub_id: str, attach_num: str, requ
     except (requests.RequestException, ValueError, TypeError):
         log.exception("noticeboard: errore nel download di un allegato")
         raise HTTPException(502, "Impossibile scaricare l'allegato. Riprova più tardi.")
+
+
+@app.get("/api/absences")
+def get_absences(
+    request: Request,
+    date_from: date | None = Query(default=None, alias="dateFrom"),
+    date_to: date | None = Query(default=None, alias="dateTo"),
+):
+    """Restituisce gli eventi di assenza, ritardo e uscita."""
+    s = current_session(request)
+    if (date_from is None) != (date_to is None):
+        raise HTTPException(422, "Indica entrambe le date dell'intervallo.")
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(422, "La data finale precede quella iniziale.")
+    try:
+        begin = date_from.strftime("%Y%m%d") if date_from else None
+        end = date_to.strftime("%Y%m%d") if date_to else None
+        data = s["user"].assenze(begin, end)
+        if not isinstance(data, dict):
+            raise TypeError("La risposta delle assenze non è valida.")
+        return data
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("absences: errore nel recupero degli eventi")
+        raise HTTPException(502, "ClasseViva non ha restituito dati validi per le assenze.")
+
+
+@app.get("/api/absences/justifications/config")
+def get_justification_config(request: Request):
+    """Restituisce abilitazioni e causali per la giustificazione online."""
+    s = current_session(request)
+    try:
+        data = s["user"].libretto_web_conf()
+        if not isinstance(data, dict):
+            raise TypeError("La configurazione delle giustificazioni non è valida.")
+        return data
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("absences: errore nel recupero della configurazione")
+        raise HTTPException(502, "ClasseViva non ha restituito una configurazione valida.")
+
+
+@app.get("/api/absences/justifications")
+def get_justifications(request: Request):
+    """Restituisce le giustificazioni registrate nel libretto web."""
+    s = current_session(request)
+    try:
+        data = s["user"].libretto_web()
+        if not isinstance(data, dict):
+            raise TypeError("La risposta del libretto web non è valida.")
+        return data
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("absences: errore nel recupero delle giustificazioni")
+        raise HTTPException(502, "ClasseViva non ha restituito dati validi per le giustificazioni.")
+
+
+def validated_justification_body(body: JustificationIn) -> dict:
+    if not body.causalCode.strip() or not body.reason.strip():
+        raise HTTPException(422, "Causale e motivazione sono obbligatorie.")
+    if body.dateEnd < body.dateStart:
+        raise HTTPException(422, "La data finale precede quella iniziale.")
+    if body.evtType != 0 and body.dateStart != body.dateEnd:
+        raise HTTPException(422, "Ritardi e uscite devono riferirsi a un solo giorno.")
+    if body.evtType != 0 and body.time is None:
+        raise HTTPException(422, "L'orario è obbligatorio per ritardi e uscite.")
+    payload = body.model_dump(mode="json", exclude_none=True)
+    if body.evtType == 0:
+        payload.pop("time", None)
+        payload.pop("pickup", None)
+    elif body.evtType == 1:
+        payload.pop("pickup", None)
+    else:
+        payload["pickup"] = body.pickup
+    return payload
+
+
+@app.post("/api/absences/justifications")
+def create_justification(body: JustificationIn, request: Request):
+    """Crea una giustificazione per un'assenza, un ritardo o un'uscita."""
+    s = current_session(request)
+    payload = validated_justification_body(body)
+    try:
+        result = s["user"].crea_giustifica(payload)
+        return result if result is not None else {"ok": True}
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("absences: errore nella creazione della giustificazione")
+        raise HTTPException(502, "Impossibile creare la giustificazione. Riprova più tardi.")
+
+
+@app.put("/api/absences/justifications/{evt_id}")
+def update_justification(evt_id: str, body: JustificationIn, request: Request):
+    """Modifica una giustificazione esistente."""
+    s = current_session(request)
+    if not re.fullmatch(r"[1-9][0-9]{0,29}", evt_id):
+        raise HTTPException(422, "Id evento non valido.")
+    payload = validated_justification_body(body)
+    try:
+        result = s["user"].modifica_giustifica(int(evt_id), payload)
+        return result if result is not None else {"ok": True}
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("absences: errore nella modifica della giustificazione")
+        raise HTTPException(502, "Impossibile modificare la giustificazione. Riprova più tardi.")
+
+
+@app.delete("/api/absences/justifications/{evt_id}")
+def delete_justification(evt_id: str, request: Request):
+    """Elimina una giustificazione esistente."""
+    s = current_session(request)
+    if not re.fullmatch(r"[1-9][0-9]{0,29}", evt_id):
+        raise HTTPException(422, "Id evento non valido.")
+    try:
+        result = s["user"].elimina_giustifica(int(evt_id))
+        return result if result is not None else {"ok": True}
+    except (requests.RequestException, KeyError, ValueError, TypeError):
+        log.exception("absences: errore nell'eliminazione della giustificazione")
+        raise HTTPException(502, "Impossibile eliminare la giustificazione. Riprova più tardi.")
 
 
 @app.get("/api/events")

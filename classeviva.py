@@ -98,12 +98,48 @@ class Utente:
 
 
 
-    def assenze(self):
-        # Recupera i dettagli delle assenze
+    def assenze(self, begin: str | None = None, end: str | None = None):
+        # Recupera i dettagli delle assenze, eventualmente in un intervallo.
         endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/details/"
-        response = requests.get(endpoint, headers=self.headers)
+        if begin is not None and end is not None:
+            endpoint += f"{begin}/{end}"
+        response = requests.get(endpoint, headers=self.headers, timeout=15)
         response.raise_for_status()
-        return json.loads(response.text)
+        return response.json()
+
+    def libretto_web_conf(self):
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/librettowebconf"
+        response = requests.get(endpoint, headers=self.headers, timeout=15)
+        response.raise_for_status()
+        return response.json()
+
+    def libretto_web(self):
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/librettoweb"
+        response = requests.get(endpoint, headers=self.headers, timeout=15)
+        response.raise_for_status()
+        return response.json()
+
+    @staticmethod
+    def _json_or_none(response):
+        return response.json() if response.content else None
+
+    def crea_giustifica(self, body: dict):
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/librettoweb"
+        response = requests.post(endpoint, json=body, headers=self.headers, timeout=15)
+        response.raise_for_status()
+        return self._json_or_none(response)
+
+    def modifica_giustifica(self, evt_id: int, body: dict):
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/librettoweb/{evt_id}"
+        response = requests.put(endpoint, json=body, headers=self.headers, timeout=15)
+        response.raise_for_status()
+        return self._json_or_none(response)
+
+    def elimina_giustifica(self, evt_id: int):
+        endpoint = apiUrl + f"/students/{self.login['studentId']}/absences/librettoweb/{evt_id}"
+        response = requests.delete(endpoint, headers=self.headers, timeout=15)
+        response.raise_for_status()
+        return self._json_or_none(response)
 
     def didattica(self, contentId: str = ""):
         # Recupera i materiali didattici, opzionalmente un contenuto specifico
