@@ -242,6 +242,9 @@ function sameJsonValue(left, right) {
 function cachePathsAffectedByMutation(path) {
   if (/^\/api\/noticeboard\/[^/]+\/\d+\/read$/.test(path)) return ["/api/noticeboard"];
   if (/^\/api\/events\/[0-9a-f]{12}\/(?:done|kind)$/.test(path)) return ["/api/events"];
+  if (/^\/api\/absences\/justifications(?:\/\d+)?$/.test(path)) {
+    return ["/api/absences", "/api/absences/justifications"];
+  }
   if (path === "/api/setup") {
     return ["/api/me", "/api/events", "/api/timetable", "/api/setup/timetable"];
   }
@@ -423,8 +426,8 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshCachedApiEndpoints();
 });
 
-const avatarViews = new Set(["home", "grades", "subjects", "noticeboard", "setup", "settings","debug"]);
-const menuViews = new Set(["home", "grades", "subjects", "noticeboard", "settings", "debug"]);
+const avatarViews = new Set(["home", "grades", "subjects", "absences", "noticeboard", "setup", "settings","debug"]);
+const menuViews = new Set(["home", "grades", "subjects", "absences", "noticeboard", "settings", "debug"]);
 
 function profileInitials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
@@ -472,6 +475,7 @@ function show(view) {
   $("view-home").hidden = view !== "home";
   $("view-grades").hidden = view !== "grades";
   $("view-subjects").hidden = view !== "subjects";
+  $("view-absences").hidden = view !== "absences";
   $("view-noticeboard").hidden = view !== "noticeboard";
   $("view-debug").hidden = view !== "debug";
   $("avatar").hidden = !avatarViews.has(view);
@@ -514,7 +518,7 @@ let appDataPrefetchStarted = false;
 function prefetchSecondaryData() {
   if (appDataPrefetchStarted || !cacheScope) return;
   appDataPrefetchStarted = true;
-  for (const path of ["/api/grades", "/api/noticeboard"]) {
+  for (const path of ["/api/grades", "/api/noticeboard", "/api/absences", "/api/absences/justifications/config", "/api/absences/justifications"]) {
     api(path).then(async (response) => {
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -616,6 +620,7 @@ function restoreView(view, state = null) {
   if (view === "home") showHome();
   else if (view === "grades") Grades.open();
   else if (view === "subjects") Subjects.open(state?.subjectId ?? null);
+  else if (view === "absences") Absences.open();
   else if (view === "noticeboard") Noticeboard.open();
   else if (view === "settings") Settings.open(appBack);
   else if (view === "debug" && debugMode) {
@@ -773,6 +778,10 @@ $("menu-grades").addEventListener("click", () => {
 $("menu-subjects").addEventListener("click", () => {
   navigateTo("subjects");
   Subjects.open();
+});
+$("menu-absences").addEventListener("click", () => {
+  navigateTo("absences");
+  Absences.open();
 });
 $("menu-noticeboard").addEventListener("click", () => {
   navigateTo("noticeboard");

@@ -453,7 +453,7 @@ def get_justifications(request: Request):
     s = current_session(request)
     try:
         data = s["user"].libretto_web()
-        if not isinstance(data, dict):
+        if not isinstance(data, (dict, list)):
             raise TypeError("La risposta del libretto web non è valida.")
         return data
     except (requests.RequestException, KeyError, ValueError, TypeError):

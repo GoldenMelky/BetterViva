@@ -39,7 +39,7 @@ Per migliorare l'esperienza e correggere bug, potrei implementare un sistema di 
 - [x] Bacheca
 - [x] Voti
   - [x] Calcolatore di voti
-- [ ] Assenze
+- [x] Assenze
 - [ ] Note
 - [ ] Altre funzioni di ClasseViva
 - [ ] Temi

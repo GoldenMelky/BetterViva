@@ -91,6 +91,7 @@
     <button id="menu-home" type="button">Home</button>
     <button id="menu-grades" type="button">Voti</button>
     <button id="menu-subjects" type="button">Materie</button>
+    <button id="menu-absences" type="button">Assenze</button>
     <button id="menu-noticeboard" type="button">Bacheca</button>
     <button id="menu-settings" type="button">Impostazioni</button>
     <button id="menu-debug" type="button" hidden>Debug</button>
@@ -154,6 +155,10 @@
       <div id="noticeboard-body"></div>
     </section>
 
+    <section id="view-absences" hidden aria-label="Assenze e giustificazioni">
+      <div id="absences-body"></div>
+    </section>
+
     <section id="view-debug" hidden aria-label="Debug">
       <h1>Debug notifiche</h1>
       <p class="debug-hint">Aggiunge una notifica usando l’elemento più recente già disponibile per ciascun tipo. Le azioni e i dati restano locali.</p>
@@ -205,6 +210,7 @@
   <script src="/static/home.js"></script>
   <script src="/static/grades.js"></script>
   <script src="/static/subjects.js"></script>
+  <script src="/static/absences.js"></script>
   <script src="/static/noticeboard.js"></script>
   <script src="/static/setup.js"></script>
   <script src="/static/settings.js"></script>
